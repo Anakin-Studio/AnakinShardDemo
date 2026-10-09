@@ -2,12 +2,12 @@
 
 # SubZeroShardDemo
 
-### Cross-shard player transfer for s&box, proven end-to-end
+### Cross-shard player transfer for s&box (backend proven, in-game run pending)
 
 Move a player between separate dedicated servers ("shards") in real time, carrying their
 money, carried item, and state, with all the ways it should not be allowed gated and enforced.
 
-![status](https://img.shields.io/badge/status-working%20prototype-brightgreen)
+![status](https://img.shields.io/badge/status-backend%20proven%2C%20in--game%20pending-yellow)
 ![engine](https://img.shields.io/badge/engine-s%26box-1793D1)
 ![backend](https://img.shields.io/badge/backend-.NET%2010-512BD4)
 ![auth](https://img.shields.io/badge/server--backend-HMAC--SHA256-orange)
@@ -23,7 +23,9 @@ s&box has no built-in way to hand a connected player from one server to another.
 minimal, standalone prototype that builds that mechanism by hand and proves it works:
 
 - 3 dedicated shard servers (`A Downtown`, `B Industrial`, `C Jail`), each a separate
-  `sbox-server.exe` process running the same game and scene, tinted/labelled per shard.
+  `sbox-server.exe` process running the same game and scene, labelled per shard. Shard ids are
+  exactly `A`, `B` and `C` today: `Code/Shard/ShardContext.cs` (`Normalize`, hostname parse)
+  accepts only those three and silently falls back to `A` for anything else.
 - A small backend (`http://localhost:8443`) that holds the authoritative shared player
   state (money, carried item, handcuffed, current shard) keyed by SteamId, and coordinates every
   transfer with signed, single-use, expiring tokens.
@@ -34,13 +36,28 @@ minimal, standalone prototype that builds that mechanism by hand and proves it w
 > across every success and failure path (token expiry, replay, destination full/down, source crash,
 > duplicate login).
 
-### What's proven (live, on real dedicated servers)
+### Status: what is proven and what is pending
 
-- A client connects to a dedicated shard (no listen-server / self-hosting anywhere).
-- Walking a pad hops the client A to B, reconnecting to the other dedicated server.
-- Money and carried item carried exactly (e.g. toll deducts once: $500 to $400, arrives $400).
-- Gate rules enforced: `A->C denied: not handcuffed`, `A->B denied: cooldown (3.0s)`.
-- Backend authoritative and idempotent (23/23 backend tests, incl. replay / expiry / full / down).
+Source of truth: `Development/Docs/TEST_RESULTS.md` (local working notes, gitignored) and
+`Development/Docs/SPIKE.md`. Re-read those before claiming more than this table does.
+
+| Area | Status | Evidence |
+|---|---|---|
+| Backend transfer state machine (prepare, accept, ledger, cancel, expiry, bad signature) | Proven | `backend/smoke-test.ps1`, 23/23 checks (run 2026-07-14) |
+| Destination full / down, token expiry and revert, replay no-op, exact-once toll ledger | Proven (backend only) | same smoke test |
+| A dedicated shard boots from the local `.sbproj`, creates a lobby, heartbeats the backend | Proven (2026-07-14) | `SPIKE.md` execution results |
+| Client connects to a shard and hops A to B by walking a pad / pressing E | Pending | in-game column of `TEST_RESULTS.md` is all "not yet run" |
+| Gate rules in game (handcuffed, combat lock, cooldown, toll) | Written, not run in game | pure logic in `Code/Transfer/TransferService.cs` `EvaluateGate` |
+| Duplicate login kick path (`Connection.Kick`) | Pending | backend side works; kick not run in game |
+| Lobby discovery by `shardid` tag, then `Networking.Connect` | Pending | code path exists in `PlayerTransfer.ConnectToShard`, not run live |
+
+The invariant ("money and carried item never duplicated, never lost") holds by construction in the
+backend and is demonstrated by the smoke test. End-to-end confirmation across live shards is
+still outstanding. If live runs were done after `TEST_RESULTS.md` was last updated, record them
+there first.
+
+Planned, not built: shard ids such as `downtown-01` (see "Dynamic shard scaling" and
+"Guidance for games adopting shards" below).
 
 ---
 
@@ -96,7 +113,21 @@ sequenceDiagram
 ```
 
 If anything fails (token expires, destination full/down, client can't connect), the backend
-auto-reverts the `InTransit` lock on its TTL and the player stays put with money intact.
+auto-reverts the `InTransit` lock on its TTL (30 s, swept every 5 s) and the player stays put with
+money intact.
+
+Notes on what the game does and does not do today:
+
+- The game never calls `/transfer/cancel`. `BackendClient.Cancel` exists and the backend
+  implements it (smoke-tested), but nothing in `Code/` invokes it. If the client fails to find or
+  reach the destination lobby, `PlayerTransfer.ConnectToShard` only logs a warning; it does not
+  reconnect to the source or cancel. Recovery relies on the TTL sweeper, or on the player
+  re-joining the source shard (accept on a non-destination shard abandons the transfer and falls
+  back to a normal join).
+- The destination does not receive a token or lobby id from the client. It identifies the arrival
+  by SteamId and `/transfer/accept` resolves the transfer from the backend's `InTransit` record.
+- The snapshot (money, item, cuffs, position) is taken at prepare, so the toll must be charged
+  before prepare, and anything changed on the source after prepare is overwritten at accept.
 
 ---
 
@@ -109,6 +140,10 @@ auto-reverts the `InTransit` lock on its TTL and the player stays put with money
 | Prisoner (to C) | player is handcuffed | transfer to Jail | `not handcuffed` |
 | any pad | handcuffed players may use only the Prisoner pad | n/a | `handcuffed - jail only` |
 
+Caveat: the gate does not check that a Prisoner transfer actually targets `C`, and the toll amount
+and rule arrive from the client on the button path. See "Code risks found 2026-10-09" in the local
+`Development/Docs/TODO.md`.
+
 ---
 
 ## Getting started
@@ -118,9 +153,15 @@ auto-reverts the `InTransit` lock on its TTL and the player stays put with money
 - Steam running (satisfies the server's Steam client binaries)
 - .NET 10 SDK (for the backend)
 
+> The launch scripts now live in `Development\Scripts\` (they moved from `scripts\`). Known
+> issue: `run-shard.bat` and `run-backend.bat` still build their project/backend paths with a
+> single `..` (they were written for a root-level `scripts\` folder), so from
+> `Development\Scripts\` they resolve to `Development\` and fail to find `subzerosharddemo.sbproj`
+> and `backend\`. Change `..` to `..\..` in those two scripts (tracked in the local TODO).
+
 ### 1. Start the backend
 ```bat
-scripts\run-backend.bat
+Development\Scripts\run-backend.bat
 ```
 Runs on `http://localhost:8443`. Verify: open `http://localhost:8443/health`, returns `{"ok":true,...}`.
 
@@ -128,26 +169,38 @@ Runs on `http://localhost:8443`. Verify: open `http://localhost:8443/health`, re
 > s&box's localhost HTTP allowlist so the editor and servers can reach it.
 
 ### 2. Start the shards
-All three at once: double-click `scripts\run-all.bat` (or run it from a terminal); it
+All three at once: double-click `Development\Scripts\run-all.bat` (or run it from a terminal); it
 confirms, then opens the backend and each shard in its own window:
 ```bat
-scripts\run-all.bat
+Development\Scripts\run-all.bat
 ```
 or one at a time:
 ```bat
-scripts\run-shard.bat A     ::  Downtown  (27015)
-scripts\run-shard.bat B     ::  Industrial (27017)
-scripts\run-shard.bat C     ::  Jail       (27019)
+Development\Scripts\run-shard.bat A     ::  Downtown  (27015)
+Development\Scripts\run-shard.bat B     ::  Industrial (27017)
+Development\Scripts\run-shard.bat C     ::  Jail       (27019)
 ```
-Each shard boots headless, creates a Steam lobby (tagged with its shard id), and heartbeats the
-backend. Stop everything with `scripts\stop-all.bat`.
+Each shard boots headless, creates a Steam lobby tagged with its shard id (`shardid`), and
+heartbeats the backend. Stop everything with `Development\Scripts\stop-all.bat`.
 
 ### 3. Connect a client
 The game must be published once so the client can load the package (`Publish` in the editor).
 Then launch the game and, in the console (<kbd>~</kbd>):
 ```
-connect local        # joins a local shard (or pick a shard from the lobby list by name)
+connect local        # UNVERIFIED: joins a local shard via +net_allow_local
 ```
+How a client finds a shard:
+
+- A dedicated server cannot read its own lobby id (`Networking.CreateLobby` returns `void`,
+  `Connection.Local` is null headless), so the heartbeat's `connectHandle` is always an empty
+  string (`ShardNetwork.ConnectHandle` is never assigned) and the backend's `DstConnectHandle` is
+  unused.
+- Instead each shard tags its lobby (`Networking.SetData( "shardid", id )` in
+  `Code/Net/ShardNetwork.cs`). During a transfer the owning client runs
+  `Networking.QueryLobbies`, picks the lobby whose `shardid` tag matches the target, and calls
+  `Networking.Connect( lobbyId )` (`Code/Player/PlayerTransfer.cs`).
+- For the very first join, pick a shard from the lobby list. Whether `connect local` reaches the
+  right instance when several run on one machine is still unverified (`SPIKE.md`).
 
 ### 4. Play
 - You spawn on a shard. The HUD banner shows which one (SHARD A - DOWNTOWN), your money,
@@ -161,7 +214,10 @@ connect local        # joins a local shard (or pick a shard from the lobby list 
 
 ## Debug commands
 
-Run from the client console; they execute host-side on your player:
+Run from the client console; they execute host-side on your player. WARNING: they are
+`[ConCmd( ..., ConVarFlags.Server )]` with no permission check (`Code/Debug/DebugCommands.cs`), so
+any connected client can run them, including `subzero_setmoney`. Acceptable for a local demo; a
+real game must restrict them to the host or staff, or compile them out of release builds.
 
 | Command | Effect |
 |---|---|
@@ -189,8 +245,9 @@ SubZeroShardDemo/
 │  └─ Shared/                # Hmac (managed SHA-256), TransferProtocol (DTOs)
 ├─ backend/                  # standalone .NET 10 service (player store + transfer coordinator)
 │  └─ smoke-test.ps1         #   exercises the whole state machine over HTTP (23 checks)
-├─ config/                   # shard.A/B/C.json  (ports, capacity, secret, peers)
-├─ scripts/                  # run-backend.bat, run-shard.bat, run-all.ps1, stop-all.ps1
+├─ config/                   # shard.A/B/C.json  (not reliably read at runtime, see Configuration)
+├─ Development/Scripts/      # run-backend.bat, run-shard.bat, run-all.bat/.ps1, stop-all.bat/.ps1
+├─ Development/Docs/         # architecture, multiplayer, field notes (TODO/TEST_RESULTS/SPIKE are local-only)
 └─ Assets/scenes/            # subzerosharddemo.scene  (the shared world)
 ```
 
@@ -212,10 +269,29 @@ processes from colliding.
 
 ## Configuration
 
-Per-shard config lives in `config/shard.{A,B,C}.json` (display name, ports, backend URL, capacity,
-peers, shared secret). Each shard learns which one it is from the `+subzero_shard <id>` launch arg.
-The HMAC secret is baked for the demo and matches the backend default; override everywhere with the
-`SHARD_DEMO_SECRET` env var for anything real.
+Each shard learns which one it is from the `+subzero_shard <id>` launch arg (read late, in
+`ShardContext.OnStart`, with a hostname parse and an `A` default as fallbacks; whether the launch
+convar is applied before that point on a real dedicated server is unverified).
+
+Config JSON files: `config/shard.{A,B,C}.json` hold display name, ports, backend URL, capacity,
+peers and the shared secret, and `ShardConfig.Load` tries to read them through
+`FileSystem.Mounted` (`config/shard.<id>.json`). Treat them as NOT read at runtime: the `config/`
+folder sits at the project root rather than under `Assets/`, nothing has confirmed that the mount
+sees it (the `.sbproj` `Resources` glob `*.json` may or may not cover it), and
+`Development/Docs/TODO.md` (item E) records it as unread. When the read fails
+the game logs `using baked default config` and uses `ShardConfig.Default`, whose values are an
+exact copy of the JSON files. So editing the JSON has no guaranteed effect; edit
+`ShardConfig.Default` (and keep the files in sync) until a decision is made to either move the
+configs under `Assets/` and re-test the loader or delete the loader.
+
+Ports and capacity used by the launch scripts are hard-coded in `run-shard.bat`, independent of
+the JSON.
+
+The HMAC secret is baked into the game (`ShardConfig.DemoSecret`) and the backend
+(`Store.DefaultSecret`) and committed. Only the backend reads the `SHARD_DEMO_SECRET` env var
+(`backend/Program.cs`); the game side never does. Setting the env var on the backend alone makes
+every shard request fail with 401. A real deployment needs the game to take the secret from a
+launch arg or similar as well.
 
 ---
 
@@ -225,8 +301,53 @@ The HMAC secret is baked for the demo and matches the backend default; override 
   (enforced via `Application.IsDedicatedServer`).
 - A dedicated server can't read its own lobby id, so clients discover a target shard's lobby by
   its `shardid` tag (`QueryLobbies` is client-side) and connect to it.
+- The backend port must be on s&box's localhost HTTP allowlist (80, 443, 8080, 8443); that is why
+  it is 8443. The launch script also passes `-allowlocalhttp`.
+- The editor is not a shard: `ShardContext` and `ShardNetwork` only build a `BackendClient` and
+  create a lobby when `Application.IsDedicatedServer` is true, so an in-editor play session has no
+  backend client and the HUD shows `$0` and default state. Test money and transfers on dedicated
+  shards.
 - This is a throwaway prototype, not a framework. The shared secret is committed, the map is
   primitive, and the goal is proving the mechanism, not shipping it.
+- Known code risks (client-supplied toll amount, open debug commands, ledger without owner
+  checks, state saved only at prepare, and more) are listed in the local
+  `Development/Docs/TODO.md` under "Code risks found 2026-10-09".
+
+---
+
+## Guidance for games adopting shards
+
+Rules distilled from this demo. Items marked (demo) are implemented here; items marked (rule)
+are the demo's principle applied to data it does not handle, so confirm them for your game.
+
+1. Per-player data authority lives in the backend (demo). Money, inventory, role, cuffs, XP,
+   bans and anything else a player carries must be keyed by SteamId in the backend, never on a
+   shard's disk. A shard holds a working copy and writes back through backend calls.
+2. One writer per player record (demo). At any moment exactly one shard owns a player
+   (`CurrentShard`), and a transfer is a prepare/accept hand-off that flips that ownership. Reject
+   writes from a shard that is not the current owner (the demo does not yet enforce this on
+   `/player/apply-ledger`; see risks).
+3. Per-shard local data goes under a shard-prefixed path (rule), for example
+   `FileSystem.Data` path `shards/<shardId>/...`. The demo writes nothing to `FileSystem.Data`;
+   anything two shards must agree on belongs in the backend, not on disk.
+4. Shard-prefixed ids (rule, partly demo). Transfer ids are already `"<shardId>:<guid>"`. Give
+   shards stable ids and prefix any id a shard generates (items, vehicles, documents, log rows) so
+   two shards can never mint the same id. Today the game only accepts `A`, `B`, `C`; ids like
+   `downtown-01` need `ShardContext.Normalize`, the hostname parse and the launch scripts changed
+   first.
+5. Use the backend clock for any time that crosses shards (rule). Shard timers use
+   `Time.Now`, which is each shard's own scene clock, so combat and cooldown windows reset on
+   arrival and cannot be compared between shards. Store timestamps and expiries in the backend
+   (the demo's token expiry already does) and send durations or server-issued times, not
+   `Time.Now` values.
+6. Debug and admin commands are host or staff only (rule). Do not ship `ConVarFlags.Server`
+   commands that any client can call, and never let the client supply amounts, rules or targets
+   that the host then trusts. Derive those on the host from the world object.
+7. Sign every shard to backend call and keep the secret out of the repo (rule). The demo uses one
+   shared HMAC secret for all shards; a real game wants per-shard secrets and the secret passed at
+   launch.
+8. Make backend mutations idempotent and persist at each state change, not only at hand-off
+   (demo for money via the ledger; not yet for cuffs, item and position).
 
 ---
 
@@ -874,7 +995,8 @@ Each instance would need:
 * CPU allocation
 * Health monitoring
 
-Example shard IDs:
+Example shard IDs (PLANNED, not supported today: the code accepts only `A`, `B`, `C`, see
+`Code/Shard/ShardContext.cs`):
 ```text
 downtown-01
 downtown-02
