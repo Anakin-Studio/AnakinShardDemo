@@ -2,7 +2,7 @@
 
 # SubZeroShardDemo
 
-### Cross-shard player transfer for s&box (backend proven, in-game run pending)
+### Cross-shard player transfer for s&box (backend proven, in-game run proven)
 
 Move a player between separate dedicated servers ("shards") in real time, carrying their
 money, carried item, and state, with all the ways it should not be allowed gated and enforced.
