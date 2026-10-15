@@ -1,0 +1,552 @@
+[
+ {
+  "sha": "76f1d85c36c05772b3d13b2726e0d5b8b0df2b4c",
+  "parents": "",
+  "author_name": "JordanR",
+  "author_email": "81587380+JordanR123@users.noreply.github.com",
+  "author_date": "2026-07-15T11:24:49-07:00",
+  "committer_name": "JordanR",
+  "committer_email": "81587380+JordanR123@users.noreply.github.com",
+  "committer_date": "2026-07-15T11:24:49-07:00",
+  "message": "Initial commit",
+  "files": [
+   {
+    "path": ".gitattributes",
+    "added": 2,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": ".gitignore",
+    "added": 31,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Assets/scenes/subzerosharddemo.scene",
+    "added": 932,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/Debug/DebugCommands.cs",
+    "added": 105,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/Net/BackendClient.cs",
+    "added": 93,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/Net/ServerDirectory.cs",
+    "added": 67,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/Net/ShardNetwork.cs",
+    "added": 134,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/Player/PlayerTestState.cs",
+    "added": 68,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/Player/PlayerTransfer.cs",
+    "added": 74,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/Player/PlayerWallet.cs",
+    "added": 30,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/Shard/ShardConfig.cs",
+    "added": 65,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/Shard/ShardContext.cs",
+    "added": 95,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/Shared/Hmac.cs",
+    "added": 116,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/Shared/TransferProtocol.cs",
+    "added": 76,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/Transfer/TransferService.cs",
+    "added": 217,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/UI/DebugHud.razor",
+    "added": 101,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/UI/DebugHud.razor.scss",
+    "added": 2,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/World/TransitionButton.cs",
+    "added": 48,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Code/World/TransitionZone.cs",
+    "added": 38,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "ProjectSettings/Collision.config",
+    "added": 36,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "ProjectSettings/Input.config",
+    "added": 225,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "ProjectSettings/Platform.config",
+    "added": 9,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "README.md",
+    "added": 1024,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "backend/Crypto.cs",
+    "added": 28,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "backend/Models.cs",
+    "added": 90,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "backend/Program.cs",
+    "added": 122,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "backend/Store.cs",
+    "added": 405,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "backend/SubZeroShardBackend.csproj",
+    "added": 12,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "backend/smoke-test.ps1",
+    "added": 137,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "config/shard.A.json",
+    "added": 10,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "config/shard.B.json",
+    "added": 10,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "config/shard.C.json",
+    "added": 10,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "scripts/run-all.bat",
+    "added": 44,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "scripts/run-all.ps1",
+    "added": 36,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "scripts/run-backend.bat",
+    "added": 24,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "scripts/run-shard.bat",
+    "added": 55,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "scripts/setup-steamclient.ps1",
+    "added": 21,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "scripts/stop-all.bat",
+    "added": 16,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "scripts/stop-all.ps1",
+    "added": 18,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "subzerosharddemo.sbproj",
+    "added": 35,
+    "deleted": 0,
+    "binary": false
+   }
+  ],
+  "added": 4661,
+  "deleted": 0,
+  "code_added": 2233,
+  "code_deleted": 0,
+  "github_author": "JordanR123",
+  "github_committer": "JordanR123",
+  "github_verified": false
+ },
+ {
+  "sha": "fe7ef8db2d32ce9f15fa9b4e656fbe1d7ddaff60",
+  "parents": "76f1d85c36c05772b3d13b2726e0d5b8b0df2b4c",
+  "author_name": "JordanR",
+  "author_email": "81587380+JordanR123@users.noreply.github.com",
+  "author_date": "2026-07-17T11:22:36-07:00",
+  "committer_name": "JordanR",
+  "committer_email": "81587380+JordanR123@users.noreply.github.com",
+  "committer_date": "2026-07-17T11:22:36-07:00",
+  "message": "Add Development/ folder, sweep stray root docs into it",
+  "files": [
+   {
+    "path": "Development/Agent/AgentPrompt.md",
+    "added": 39,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/Agent/Conventions.md",
+    "added": 36,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/Agent/Instructions.md",
+    "added": 69,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/Agent/VersionControl.md",
+    "added": 35,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/CHANGELOG.md",
+    "added": 8,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/Docs/AdoptedPackages.md",
+    "added": 21,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/Docs/Architecture.md",
+    "added": 22,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/Docs/FieldNotes.md",
+    "added": 23,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/Docs/GameDesign.md",
+    "added": 16,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/Docs/Multiplayer.md",
+    "added": 29,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/Docs/ProductScope.md",
+    "added": 15,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/Docs/ProjectLayout.md",
+    "added": 21,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/Docs/ResearchFindings.md",
+    "added": 14,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/Docs/Versioning.md",
+    "added": 10,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/Important Source Assets/.gitkeep",
+    "added": 0,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/README.md",
+    "added": 82,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/References/.gitkeep",
+    "added": 0,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/Scenes/.gitkeep",
+    "added": 0,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Development/Scripts/.gitkeep",
+    "added": 0,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "{scripts => Development/Scripts}/run-all.bat",
+    "added": 0,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "{scripts => Development/Scripts}/run-all.ps1",
+    "added": 0,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "{scripts => Development/Scripts}/run-backend.bat",
+    "added": 0,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "{scripts => Development/Scripts}/run-shard.bat",
+    "added": 0,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "{scripts => Development/Scripts}/setup-steamclient.ps1",
+    "added": 0,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "{scripts => Development/Scripts}/stop-all.bat",
+    "added": 0,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "{scripts => Development/Scripts}/stop-all.ps1",
+    "added": 0,
+    "deleted": 0,
+    "binary": false
+   },
+   {
+    "path": "Marketing/Thumbnail.png",
+    "added": 0,
+    "deleted": 0,
+    "binary": true
+   },
+   {
+    "path": "Marketing/Thumbnail.psd",
+    "added": 0,
+    "deleted": 0,
+    "binary": true
+   },
+   {
+    "path": "Marketing/image.png",
+    "added": 0,
+    "deleted": 0,
+    "binary": true
+   }
+  ],
+  "added": 440,
+  "deleted": 0,
+  "code_added": 0,
+  "code_deleted": 0,
+  "github_author": "JordanR123",
+  "github_committer": "JordanR123",
+  "github_verified": false
+ },
+ {
+  "sha": "520092e3c20f184271dfecc76f6aeb8d2df61d92",
+  "parents": "fe7ef8db2d32ce9f15fa9b4e656fbe1d7ddaff60",
+  "author_name": "JordanR",
+  "author_email": "81587380+JordanR123@users.noreply.github.com",
+  "author_date": "2026-10-09T10:40:10-07:00",
+  "committer_name": "JordanR",
+  "committer_email": "81587380+JordanR123@users.noreply.github.com",
+  "committer_date": "2026-10-09T10:40:10-07:00",
+  "message": "Notes",
+  "files": [
+   {
+    "path": "Development/Docs/Architecture.md",
+    "added": 103,
+    "deleted": 3,
+    "binary": false
+   },
+   {
+    "path": "Development/Docs/FieldNotes.md",
+    "added": 83,
+    "deleted": 4,
+    "binary": false
+   },
+   {
+    "path": "Development/Docs/Multiplayer.md",
+    "added": 75,
+    "deleted": 4,
+    "binary": false
+   },
+   {
+    "path": "README.md",
+    "added": 149,
+    "deleted": 27,
+    "binary": false
+   }
+  ],
+  "added": 410,
+  "deleted": 38,
+  "code_added": 0,
+  "code_deleted": 0,
+  "github_author": "JordanR123",
+  "github_committer": "JordanR123",
+  "github_verified": false
+ },
+ {
+  "sha": "4c87a6635c4d11f3358998eb7c5b785e892e68d0",
+  "parents": "520092e3c20f184271dfecc76f6aeb8d2df61d92",
+  "author_name": "JordanR",
+  "author_email": "81587380+JordanR123@users.noreply.github.com",
+  "author_date": "2026-10-12T23:18:01-07:00",
+  "committer_name": "GitHub",
+  "committer_email": "noreply@github.com",
+  "committer_date": "2026-10-12T23:18:01-07:00",
+  "message": "Update README.md",
+  "files": [
+   {
+    "path": "README.md",
+    "added": 1,
+    "deleted": 1,
+    "binary": false
+   }
+  ],
+  "added": 1,
+  "deleted": 1,
+  "code_added": 0,
+  "code_deleted": 0,
+  "github_author": "JordanR123",
+  "github_committer": "web-flow",
+  "github_verified": true
+ },
+ {
+  "sha": "2cec1de92c58e95873bfd0f3703b563d27ff492c",
+  "parents": "4c87a6635c4d11f3358998eb7c5b785e892e68d0",
+  "author_name": "Jinjav6",
+  "author_email": "87618442+Jinjav66@users.noreply.github.com",
+  "author_date": "2026-10-15T05:46:08+01:00",
+  "committer_name": "Jinjav6",
+  "committer_email": "87618442+Jinjav66@users.noreply.github.com",
+  "committer_date": "2026-10-15T05:46:08+01:00",
+  "message": "Add SubZero Studios LLC proprietary license",
+  "files": [
+   {
+    "path": "LICENSE.txt",
+    "added": 34,
+    "deleted": 0,
+    "binary": false
+   }
+  ],
+  "added": 34,
+  "deleted": 0,
+  "code_added": 0,
+  "code_deleted": 0,
+  "github_author": "Jinjav66",
+  "github_committer": "Jinjav66",
+  "github_verified": false
+ }
+]

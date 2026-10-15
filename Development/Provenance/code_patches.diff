@@ -1,0 +1,2453 @@
+commit 76f1d85c36c05772b3d13b2726e0d5b8b0df2b4c
+Author: JordanR <81587380+JordanR123@users.noreply.github.com>
+AuthorDate: 2026-07-15T11:24:49-07:00
+Committer: JordanR <81587380+JordanR123@users.noreply.github.com>
+CommitDate: 2026-07-15T11:24:49-07:00
+
+    Initial commit
+
+---
+ Code/Debug/DebugCommands.cs        | 105 ++++++++++
+ Code/Net/BackendClient.cs          |  93 +++++++++
+ Code/Net/ServerDirectory.cs        |  67 ++++++
+ Code/Net/ShardNetwork.cs           | 134 ++++++++++++
+ Code/Player/PlayerTestState.cs     |  68 +++++++
+ Code/Player/PlayerTransfer.cs      |  74 +++++++
+ Code/Player/PlayerWallet.cs        |  30 +++
+ Code/Shard/ShardConfig.cs          |  65 ++++++
+ Code/Shard/ShardContext.cs         |  95 +++++++++
+ Code/Shared/Hmac.cs                | 116 +++++++++++
+ Code/Shared/TransferProtocol.cs    |  76 +++++++
+ Code/Transfer/TransferService.cs   | 217 ++++++++++++++++++++
+ Code/UI/DebugHud.razor             | 101 +++++++++
+ Code/UI/DebugHud.razor.scss        |   2 +
+ Code/World/TransitionButton.cs     |  48 +++++
+ Code/World/TransitionZone.cs       |  38 ++++
+ backend/Crypto.cs                  |  28 +++
+ backend/Models.cs                  |  90 +++++++++
+ backend/Program.cs                 | 122 +++++++++++
+ backend/Store.cs                   | 405 +++++++++++++++++++++++++++++++++++++
+ backend/SubZeroShardBackend.csproj |  12 ++
+ backend/smoke-test.ps1             | 137 +++++++++++++
+ scripts/run-all.ps1                |  36 ++++
+ scripts/setup-steamclient.ps1      |  21 ++
+ scripts/stop-all.ps1               |  18 ++
+ subzerosharddemo.sbproj            |  35 ++++
+ 26 files changed, 2233 insertions(+)
+
+diff --git a/Code/Debug/DebugCommands.cs b/Code/Debug/DebugCommands.cs
+new file mode 100644
+index 0000000..c2d8ca7
+--- /dev/null
++++ b/Code/Debug/DebugCommands.cs
+@@ -0,0 +1,105 @@
++#nullable enable
++
++using System.Linq;
++using System.Threading.Tasks;
++using Sandbox;
++
++namespace SubZeroShardDemo;
++
++/// <summary>
++/// Debug console commands to drive the tests. All run host-side (ConVarFlags.Server) and act
++/// on the caller's player, so state changes stay host-authoritative.
++///
++/// Usage from the client console (or dedicated-server console for the host):
++///   subzero_setmoney 500      set the caller's money (routed through the backend ledger)
++///   subzero_cuffs 1           handcuff (1) / uncuff (0)
++///   subzero_item briefcase    set the carried item ("" for none)
++///   subzero_combat            mark just-took-damage (starts the 5s combat lock)
++///   subzero_transfer B        force a Normal transfer to shard B/C/A
++///   subzero_info              print shard and player state to the console
++/// </summary>
++public static class DebugCommands
++{
++	[ConCmd( "subzero_setmoney", ConVarFlags.Server )]
++	public static void SetMoney( Connection caller, int amount )
++	{
++		var go = FindPlayer( caller );
++		if ( go is null ) return;
++		_ = SetMoneyAsync( caller.SteamId.ToString(), go, amount );
++	}
++
++	private static async Task SetMoneyAsync( string steamId, GameObject go, int amount )
++	{
++		var backend = ShardContext.Current?.Backend;
++		var wallet = go.Components.Get<PlayerWallet>();
++		if ( backend is null || wallet is null ) return;
++
++		var rec = await backend.PlayerGet( steamId );
++		var current = rec?.Money ?? wallet.Money;
++		var delta = amount - current;
++		var led = await backend.ApplyLedger( steamId, $"debug:setmoney:{System.Guid.NewGuid():N}", delta, "debug-setmoney" );
++		if ( led is not null && led.Ok )
++			wallet.SetAuthoritative( led.Balance );
++		Log.Info( $"[debug] setmoney {steamId} -> {led?.Balance}" );
++	}
++
++	[ConCmd( "subzero_cuffs", ConVarFlags.Server )]
++	public static void Cuffs( Connection caller, int on )
++	{
++		var state = FindPlayer( caller )?.Components.Get<PlayerTestState>();
++		if ( state is null ) return;
++		state.Handcuffed = on != 0;
++		Log.Info( $"[debug] cuffs {caller.SteamId} = {state.Handcuffed}" );
++	}
++
++	[ConCmd( "subzero_item", ConVarFlags.Server )]
++	public static void SetItem( Connection caller, string item )
++	{
++		var state = FindPlayer( caller )?.Components.Get<PlayerTestState>();
++		if ( state is null ) return;
++		state.CarriedItem = item ?? "";
++		Log.Info( $"[debug] item {caller.SteamId} = '{state.CarriedItem}'" );
++	}
++
++	[ConCmd( "subzero_combat", ConVarFlags.Server )]
++	public static void Combat( Connection caller )
++	{
++		var state = FindPlayer( caller )?.Components.Get<PlayerTestState>();
++		if ( state is null ) return;
++		state.MarkCombat();
++		Log.Info( $"[debug] combat {caller.SteamId} at {Time.Now:0.0}" );
++	}
++
++	[ConCmd( "subzero_transfer", ConVarFlags.Server )]
++	public static void ForceTransfer( Connection caller, string target )
++	{
++		var go = FindPlayer( caller );
++		if ( go is null ) return;
++		_ = TransferService.Current?.RequestTransfer( go, target.Trim().ToUpperInvariant(), TransferRule.Normal, 0 );
++	}
++
++	[ConCmd( "subzero_info", ConVarFlags.Server )]
++	public static void Info( Connection caller )
++	{
++		var ctx = ShardContext.Current;
++		var go = FindPlayer( caller );
++		var wallet = go?.Components.Get<PlayerWallet>();
++		var state = go?.Components.Get<PlayerTestState>();
++		Log.Info( $"[debug] shard={ctx?.ShardId} \"{ctx?.DisplayName}\" backend={(ctx?.Backend?.Reachable ?? false)} " +
++			$"| money={wallet?.Money} cuffs={state?.Handcuffed} item='{state?.CarriedItem}' " +
++			$"combat={state?.TimeSinceCombat:0.0}s ago cooldown={state?.TimeSinceTransfer:0.0}s ago" );
++	}
++
++	private static GameObject? FindPlayer( Connection caller )
++	{
++		var scene = Game.ActiveScene;
++		if ( scene is null ) return null;
++
++		foreach ( var pc in scene.GetAllComponents<PlayerController>() )
++		{
++			if ( pc.Network.Owner == caller )
++				return pc.GameObject;
++		}
++		return null;
++	}
++}
+diff --git a/Code/Net/BackendClient.cs b/Code/Net/BackendClient.cs
+new file mode 100644
+index 0000000..30ebbfb
+--- /dev/null
++++ b/Code/Net/BackendClient.cs
+@@ -0,0 +1,93 @@
++#nullable enable
++
++using System.Text.Json;
++using System.Threading.Tasks;
++using Sandbox;
++
++namespace SubZeroShardDemo;
++
++/// <summary>
++/// Typed, async wrapper over the backend HTTP API. Every call is an HMAC-signed envelope.
++/// Never throws into gameplay: a failed/unreachable call returns null (or a typed failure),
++/// and <see cref="Reachable"/> / <see cref="LastError"/> feed the debug HUD.
++///
++/// Host-side only, constructed by <see cref="ShardContext"/> on the host. Clients never touch
++/// the backend (host authority).
++/// </summary>
++public sealed class BackendClient
++{
++	private readonly string _baseUrl;
++	private readonly string _secret;
++	private readonly string _shardId;
++
++	public bool Reachable { get; private set; } = true;
++	public string LastError { get; private set; } = "";
++
++	public BackendClient( string baseUrl, string secret, string shardId )
++	{
++		_baseUrl = baseUrl.TrimEnd( '/' );
++		_secret = secret;
++		_shardId = shardId;
++	}
++
++	// Endpoints.
++	public Task<PlayerDto?> PlayerGet( string steamId ) =>
++		Post<PlayerDto>( "/player/get", new PlayerGetReq( steamId ) );
++
++	public Task<PlayerDto?> PlayerJoin( string steamId ) =>
++		Post<PlayerDto>( "/player/join", new PlayerJoinReq( steamId, _shardId ) );
++
++	public Task<LedgerResp?> ApplyLedger( string steamId, string transferId, int delta, string reason ) =>
++		Post<LedgerResp>( "/player/apply-ledger", new ApplyLedgerReq( steamId, transferId, delta, reason ) );
++
++	public Task<OkResp?> Heartbeat( string connectHandle, int players, int capacity ) =>
++		Post<OkResp>( "/directory/heartbeat",
++			new HeartbeatReq( _shardId, connectHandle, players, capacity, ShardContext.Version ) );
++
++	public Task<LookupResp?> Lookup( string shardId ) =>
++		Post<LookupResp>( "/directory/lookup", new LookupReq( shardId ) );
++
++	public Task<PrepareResp?> Prepare( string steamId, string dstShard, string transferId,
++		bool handcuffed, string carriedItem, string position ) =>
++		Post<PrepareResp>( "/transfer/prepare",
++			new PrepareReq( steamId, _shardId, dstShard, transferId, handcuffed, carriedItem, position ) );
++
++	public Task<AcceptResp?> Accept( string steamId ) =>
++		Post<AcceptResp>( "/transfer/accept", new AcceptReq( steamId, _shardId ) );
++
++	public Task<OkResp?> Cancel( string steamId, string transferId ) =>
++		Post<OkResp>( "/transfer/cancel", new CancelReq( steamId, transferId ) );
++
++	/// <summary>Test-only: force the player's in-flight token to expire.</summary>
++	public Task<OkResp?> ForceExpire( string steamId ) =>
++		Post<OkResp>( "/debug/force-expire", new PlayerGetReq( steamId ) );
++
++	// Transport.
++	private async Task<T?> Post<T>( string path, object dto ) where T : class
++	{
++		// Serialize the DTO, sign that exact string, then wrap. The backend verifies the HMAC
++		// over the received payload string (it does not re-serialize), so casing here is not
++		// load-bearing for auth.
++		var payload = JsonSerializer.Serialize( dto, dto.GetType() );
++		var sig = Hmac.Hex( _secret, payload );
++		var envelope = new Envelope { Payload = payload, Sig = sig };
++
++		try
++		{
++			var resp = await Http.RequestAsync( _baseUrl + path, "POST", Http.CreateJsonContent( envelope ) );
++			var body = await resp.Content.ReadAsStringAsync();
++			Reachable = true;
++			LastError = "";
++			return JsonSerializer.Deserialize<T>( body, ReadOpts );
++		}
++		catch ( System.Exception e )
++		{
++			Reachable = false;
++			LastError = e.Message;
++			Log.Warning( $"[backend] POST {path} failed: {e.Message}" );
++			return null;
++		}
++	}
++
++	private static readonly JsonSerializerOptions ReadOpts = new() { PropertyNameCaseInsensitive = true };
++}
+diff --git a/Code/Net/ServerDirectory.cs b/Code/Net/ServerDirectory.cs
+new file mode 100644
+index 0000000..b6c5187
+--- /dev/null
++++ b/Code/Net/ServerDirectory.cs
+@@ -0,0 +1,67 @@
++#nullable enable
++
++using System.Linq;
++using System.Threading.Tasks;
++using Sandbox;
++
++namespace SubZeroShardDemo;
++
++/// <summary>
++/// Host-side heartbeat + lookup against the backend server directory. On a timer it POSTs
++/// this shard's connect handle (Steam lobby id), player count and capacity so peer shards can
++/// find it; the backend expires an entry after ~15s of silence.
++/// </summary>
++public sealed class ServerDirectory : Component
++{
++	public static ServerDirectory? Current { get; private set; }
++
++	[Property] public float HeartbeatInterval { get; set; } = 5f;
++
++	private float _nextHeartbeat;
++
++	protected override void OnAwake() => Current = this;
++
++	protected override void OnStart()
++	{
++		// send an immediate first heartbeat so the shard registers quickly
++		_nextHeartbeat = 0f;
++	}
++
++	protected override void OnUpdate()
++	{
++		if ( !Application.IsDedicatedServer )
++			return;
++
++		if ( Time.Now < _nextHeartbeat )
++			return;
++
++		_nextHeartbeat = Time.Now + HeartbeatInterval;
++		_ = SendHeartbeat();
++	}
++
++	private async Task SendHeartbeat()
++	{
++		var ctx = ShardContext.Current;
++		if ( ctx?.Backend is null || ctx.Config is null )
++			return;
++
++		var handle = ShardNetwork.Current?.ConnectHandle ?? "";
++		var players = PlayerCount();
++
++		await ctx.Backend.Heartbeat( handle, players, ctx.Config.Capacity );
++		ctx.BackendOk = ctx.Backend.Reachable;   // synced to clients for the HUD
++	}
++
++	/// <summary>Number of connected players (dedicated-server host is not a player).</summary>
++	public static int PlayerCount() => Connection.All.Count();
++
++	/// <summary>Look up a peer shard's directory entry (used before a transfer).</summary>
++	public async Task<LookupResp?> Lookup( string shardId )
++	{
++		var ctx = ShardContext.Current;
++		if ( ctx?.Backend is null )
++			return null;
++
++		return await ctx.Backend.Lookup( shardId );
++	}
++}
+diff --git a/Code/Net/ShardNetwork.cs b/Code/Net/ShardNetwork.cs
+new file mode 100644
+index 0000000..3d24bdb
+--- /dev/null
++++ b/Code/Net/ShardNetwork.cs
+@@ -0,0 +1,134 @@
++#nullable enable
++
++using System;
++using System.Threading.Tasks;
++using Sandbox;
++using Sandbox.Network;
++
++namespace SubZeroShardDemo;
++
++/// <summary>
++/// Core host-side networking for a shard: creates the Steam lobby (required, or clients get
++/// "Not Connected"), spawns a player object per connection, and routes each arrival through
++/// <see cref="TransferService"/> (transfer-accept vs normal join).
++/// </summary>
++public sealed class ShardNetwork : Component, Component.INetworkListener
++{
++	public static ShardNetwork? Current { get; private set; }
++
++	/// <summary>Player prefab (PlayerController + PlayerWallet + PlayerTestState + PlayerTransfer).</summary>
++	[Property] public GameObject? PlayerPrefab { get; set; }
++
++	/// <summary>Default spawn point for fresh joins.</summary>
++	[Property] public GameObject? SpawnPoint { get; set; }
++
++	/// <summary>Where players materialise after arriving via a transfer (fallback only).</summary>
++	[Property] public GameObject? ArrivalPoint { get; set; }
++
++	/// <summary>Current Steam lobby id as a string, heartbeated as the shard's connect handle.</summary>
++	public string ConnectHandle { get; private set; } = "";
++
++	private readonly System.Collections.Generic.Dictionary<Guid, GameObject> _players = new();
++
++	protected override void OnAwake() => Current = this;
++
++	protected override void OnStart()
++	{
++		// Only a dedicated server hosts a shard lobby. A client never self-hosts.
++		if ( !Application.IsDedicatedServer )
++			return;
++
++		ResolveSceneRefs();
++
++		if ( !Networking.IsActive )
++		{
++			var cap = ShardContext.Current?.Config?.Capacity ?? 8;
++			// Create the lobby so clients can connect. Privacy defaults to public.
++			Networking.CreateLobby( new LobbyConfig
++			{
++				MaxPlayers = Math.Max( cap, 1 ),
++				Name = ShardContext.Current?.DisplayName ?? "SubZero Shard",
++			} );
++			// Tag the lobby with the shard id so clients and peers can find it via QueryLobbies.
++			Networking.SetData( "shardid", ShardContext.Current?.ShardId ?? "A" );
++			Log.Info( "[net] created lobby (shardid tagged)" );
++		}
++	}
++
++
++	// A dedicated server cannot read its own lobby id (QueryLobbies is client-only, CreateLobby
++	// returns void). Instead the shard tags its lobby (SetData "shardid" above) and the client
++	// discovers the target shard's lobby by that tag at reconnect time. See
++	// PlayerTransfer.ConnectToShard.
++
++	// INetworkListener
++
++	void Component.INetworkListener.OnActive( Connection channel )
++	{
++		if ( !Networking.IsHost )
++			return;
++
++		Log.Info( $"[net] OnActive {channel.DisplayName} ({channel.SteamId})" );
++		var go = SpawnPlayer( channel );
++		if ( go is null )
++			return;
++
++		_players[channel.Id] = go;
++		_ = TransferService.Current?.HandleArrival( channel, go );
++	}
++
++	void Component.INetworkListener.OnDisconnected( Connection channel )
++	{
++		if ( _players.Remove( channel.Id, out var go ) )
++			go?.Destroy();
++		Log.Info( $"[net] OnDisconnected {channel.DisplayName}" );
++	}
++
++	// Fallback wiring: if the GameObject refs were not set in the Inspector, resolve them by
++	// name from the scene. Lets the demo run without manual drag-drop.
++	private void ResolveSceneRefs()
++	{
++		PlayerPrefab ??= FindInScene( "PlayerTemplate" );
++		SpawnPoint ??= FindInScene( "SpawnPoint" );
++		ArrivalPoint ??= FindInScene( "ArrivalPoint" );
++
++		if ( PlayerPrefab is null )
++			Log.Warning( "[net] no PlayerPrefab and no 'PlayerTemplate' object found in scene" );
++	}
++
++	private GameObject? FindInScene( string name )
++	{
++		foreach ( var go in Scene.GetAllObjects( false ) )   // false = include disabled objects
++		{
++			if ( go.Name == name )
++				return go;
++		}
++		return null;
++	}
++
++	private GameObject? SpawnPlayer( Connection owner )
++	{
++		if ( PlayerPrefab is null )
++		{
++			Log.Warning( "[net] PlayerPrefab not assigned, cannot spawn player" );
++			return null;
++		}
++
++		var start = (SpawnPoint ?? GameObject).WorldPosition;
++		var go = PlayerPrefab.Clone( start );
++		go.Enabled = true;   // PlayerPrefab is a disabled scene template; clones must be enabled
++		go.Name = $"Player {owner.DisplayName}";
++
++		// Spawn networked and owned by the connecting client.
++		go.NetworkSpawn( owner );
++		return go;
++	}
++
++	/// <summary>Move a spawned player to a named point (host authoritative).</summary>
++	public void PlaceAt( GameObject player, bool arrival )
++	{
++		var point = arrival ? ArrivalPoint : SpawnPoint;
++		if ( point is not null )
++			player.WorldPosition = point.WorldPosition;
++	}
++}
+diff --git a/Code/Player/PlayerTestState.cs b/Code/Player/PlayerTestState.cs
+new file mode 100644
+index 0000000..e9bcfcd
+--- /dev/null
++++ b/Code/Player/PlayerTestState.cs
+@@ -0,0 +1,68 @@
++using Sandbox;
++
++namespace SubZeroShardDemo;
++
++/// <summary>
++/// Mutable per-player test state that drives the transfer gate rules. Host-authoritative
++/// (SyncFlags.FromHost); clients read for the HUD.
++///
++/// Two kinds of fields:
++///  - Shared / transferred: <see cref="Handcuffed"/> and <see cref="CarriedItem"/> travel
++///    with the player across shards (stored in the backend snapshot, applied on arrival).
++///  - Local / transient gate timers: <see cref="LastCombatTime"/> and
++///    <see cref="LastTransferTime"/> gate transfers on the current shard only and are not
++///    sent to the backend; they reset naturally when the player arrives fresh on a shard.
++///
++/// Times are <see cref="Time.Now"/> (seconds, this shard's scene clock). Gate windows
++/// compare <c>Time.Now - LastX</c> against the rule threshold (combat 5s, cooldown 3s).
++/// </summary>
++public sealed class PlayerTestState : Component
++{
++	// Shared (transferred with the player).
++
++	[Sync( SyncFlags.FromHost )] public bool Handcuffed { get; set; }
++
++	/// <summary>Id of the single carried test item, or empty string for none.</summary>
++	[Sync( SyncFlags.FromHost )] public string CarriedItem { get; set; } = "";
++
++	// Local gate timers (not transferred).
++
++	[Sync( SyncFlags.FromHost )] public float LastCombatTime { get; set; } = -9999f;
++	[Sync( SyncFlags.FromHost )] public float LastTransferTime { get; set; } = -9999f;
++
++	public bool HasCarriedItem => !string.IsNullOrEmpty( CarriedItem );
++
++	/// <summary>Seconds since the player was last in combat on this shard.</summary>
++	public float TimeSinceCombat => Time.Now - LastCombatTime;
++
++	/// <summary>Seconds since the player's last transfer attempt handled on this shard.</summary>
++	public float TimeSinceTransfer => Time.Now - LastTransferTime;
++
++	/// <summary>Host-only: mark the player as having just taken combat damage.</summary>
++	public void MarkCombat()
++	{
++		if ( !Networking.IsHost )
++			return;
++
++		LastCombatTime = Time.Now;
++	}
++
++	/// <summary>Host-only: stamp a transfer attempt for the spam cooldown.</summary>
++	public void MarkTransferAttempt()
++	{
++		if ( !Networking.IsHost )
++			return;
++
++		LastTransferTime = Time.Now;
++	}
++
++	/// <summary>Host-only: apply the transferred fields from a backend snapshot on arrival.</summary>
++	public void ApplyFromSnapshot( bool handcuffed, string carriedItem )
++	{
++		if ( !Networking.IsHost )
++			return;
++
++		Handcuffed = handcuffed;
++		CarriedItem = carriedItem ?? "";
++	}
++}
+diff --git a/Code/Player/PlayerTransfer.cs b/Code/Player/PlayerTransfer.cs
+new file mode 100644
+index 0000000..2e396fa
+--- /dev/null
++++ b/Code/Player/PlayerTransfer.cs
+@@ -0,0 +1,74 @@
++using Sandbox;
++
++namespace SubZeroShardDemo;
++
++/// <summary>
++/// Lives on the player prefab. Carries the two host-to-owner RPCs the transfer needs: telling
++/// this client to reconnect to another shard, and showing a denial reason on the HUD. The
++/// client only ever reconnects; it never talks to the backend (host authority).
++/// </summary>
++public sealed class PlayerTransfer : Component
++{
++	// Read by DebugHud on the owning client. Set by the ShowDenied RPC.
++	public string LastDenial { get; private set; } = "";
++	public float LastDenialAt { get; private set; } = -9999f;
++
++	/// <summary>
++	/// Host to owning client: disconnect and connect to the destination shard's lobby. On
++	/// failure, fall back to reconnecting to the source shard (the backend auto-reverts the
++	/// InTransit lock when the player resurfaces on the source, so money stays intact).
++	/// </summary>
++	[Rpc.Owner]
++	public void BeginReconnect( string targetShardId, string reserved )
++	{
++		if ( string.IsNullOrEmpty( targetShardId ) )
++			return;
++
++		_ = ConnectToShard( targetShardId );
++	}
++
++	// Runs on the owning client. QueryLobbies works client-side (not on a dedicated server),
++	// so the client discovers the target shard's lobby by its "shardid" tag and connects.
++	// Disconnecting from the source and joining the destination is the whole cross-shard hop.
++	private async System.Threading.Tasks.Task ConnectToShard( string shardId )
++	{
++		try
++		{
++			var lobbies = await Networking.QueryLobbies( default );
++			foreach ( var l in lobbies )
++			{
++				if ( l.Get( "shardid", "" ) == shardId )
++				{
++					Log.Info( $"[transfer] client connecting to shard {shardId} (lobby {l.LobbyId})" );
++					Networking.Connect( l.LobbyId );
++					return;
++				}
++			}
++			Log.Warning( $"[transfer] no lobby found for shard {shardId} among {lobbies.Count}" );
++		}
++		catch ( System.Exception e )
++		{
++			Log.Warning( $"[transfer] reconnect failed: {e.Message}" );
++		}
++	}
++
++	/// <summary>
++	/// Client to host: request a transfer for this player (fired by a TransitionButton press).
++	/// Runs host-side so the gate rules and prepare stay authoritative. Rule is passed as int
++	/// to keep the RPC signature simple.
++	/// </summary>
++	[Rpc.Host]
++	public void RequestTransferHost( string targetShard, int rule, int tollAmount )
++	{
++		_ = TransferService.Current?.RequestTransfer( GameObject, targetShard, (TransferRule)rule, tollAmount );
++	}
++
++	/// <summary>Host to owning client: a transfer request was denied; show the reason.</summary>
++	[Rpc.Owner]
++	public void ShowDenied( string reason )
++	{
++		LastDenial = reason;
++		LastDenialAt = Time.Now;
++		Log.Info( $"[transfer] denied: {reason}" );
++	}
++}
+diff --git a/Code/Player/PlayerWallet.cs b/Code/Player/PlayerWallet.cs
+new file mode 100644
+index 0000000..dfa7e07
+--- /dev/null
++++ b/Code/Player/PlayerWallet.cs
+@@ -0,0 +1,30 @@
++using Sandbox;
++
++namespace SubZeroShardDemo;
++
++/// <summary>
++/// A player's money. Host-authoritative: only the host may write <see cref="Money"/>
++/// (SyncFlags.FromHost), clients read it for the HUD.
++///
++/// Money is shared state, and the backend is the source of truth. Gameplay paths that spend
++/// or grant money must go through the backend ledger (stamped with a TransferId, applied
++/// exactly once); see BackendClient.ApplyLedger. This component only mirrors the current
++/// authoritative value locally so the HUD can show it; it is set from the backend snapshot
++/// on arrival and after each ledger call. Never bump Money directly on a gameplay path.
++/// </summary>
++public sealed class PlayerWallet : Component
++{
++	[Sync( SyncFlags.FromHost )] public int Money { get; set; }
++
++	/// <summary>
++	/// Host-only: overwrite the local mirror from an authoritative value (backend snapshot
++	/// on arrival, or the returned balance after a ledger call). No-op on clients.
++	/// </summary>
++	public void SetAuthoritative( int money )
++	{
++		if ( !Networking.IsHost )
++			return;
++
++		Money = money;
++	}
++}
+diff --git a/Code/Shard/ShardConfig.cs b/Code/Shard/ShardConfig.cs
+new file mode 100644
+index 0000000..e302561
+--- /dev/null
++++ b/Code/Shard/ShardConfig.cs
+@@ -0,0 +1,65 @@
++using System.Text.Json;
++using Sandbox;
++
++namespace SubZeroShardDemo;
++
++/// <summary>
++/// Per-shard configuration, loaded at boot from <c>config/shard.&lt;id&gt;.json</c> (mounted
++/// project content). Falls back to baked defaults if the file cannot be read, so the demo
++/// still runs. Held host-side only; the Secret must never sync to clients.
++/// </summary>
++public sealed class ShardConfig
++{
++	public string ShardId { get; set; } = "A";
++	public string DisplayName { get; set; } = "Downtown";
++	public int Port { get; set; } = 27015;
++	public int QueryPort { get; set; } = 27016;
++	public string BackendUrl { get; set; } = "http://localhost:8443";
++	public string Secret { get; set; } = "";
++	public int Capacity { get; set; } = 2;
++	public string[] Peers { get; set; } = System.Array.Empty<string>();
++
++	private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
++
++	public static ShardConfig Load( string shardId )
++	{
++		// Try a couple of path shapes; fall back to baked defaults on any failure.
++		foreach ( var path in new[] { $"config/shard.{shardId}.json", $"/config/shard.{shardId}.json" } )
++		{
++			try
++			{
++				if ( FileSystem.Mounted.FileExists( path ) )
++				{
++					var json = FileSystem.Mounted.ReadAllText( path );
++					var cfg = JsonSerializer.Deserialize<ShardConfig>( json, JsonOpts );
++					if ( cfg is not null )
++					{
++						Log.Info( $"[shard] loaded config from {path}: {cfg.ShardId} \"{cfg.DisplayName}\"" );
++						return cfg;
++					}
++				}
++			}
++			catch ( System.Exception e )
++			{
++				Log.Warning( $"[shard] failed reading {path}: {e.Message}" );
++			}
++		}
++
++		Log.Warning( $"[shard] using baked default config for shard {shardId}" );
++		return Default( shardId );
++	}
++
++	public static ShardConfig Default( string shardId ) => shardId.ToUpperInvariant() switch
++	{
++		"B" => new ShardConfig { ShardId = "B", DisplayName = "Industrial", Port = 27017, QueryPort = 27018,
++			Capacity = 2, Peers = new[] { "A", "C" }, Secret = DemoSecret },
++		"C" => new ShardConfig { ShardId = "C", DisplayName = "Jail", Port = 27019, QueryPort = 27020,
++			Capacity = 2, Peers = new[] { "A", "B" }, Secret = DemoSecret },
++		_ => new ShardConfig { ShardId = "A", DisplayName = "Downtown", Port = 27015, QueryPort = 27016,
++			Capacity = 2, Peers = new[] { "B", "C" }, Secret = DemoSecret },
++	};
++
++	// Matches config/shard.*.json and the backend's Store.DefaultSecret. Demo-only: a real
++	// deployment would inject this via launch/env and never bake or commit it.
++	private const string DemoSecret = "fb1976e069994f08a3f0725eb5ba9051ecd5159ab74cce1f2cdf6cad56bfa45d";
++}
+diff --git a/Code/Shard/ShardContext.cs b/Code/Shard/ShardContext.cs
+new file mode 100644
+index 0000000..9320189
+--- /dev/null
++++ b/Code/Shard/ShardContext.cs
+@@ -0,0 +1,95 @@
++#nullable enable
++
++using Sandbox;
++
++namespace SubZeroShardDemo;
++
++/// <summary>
++/// One source of truth for "which shard am I". Authored on a stable-GUID scene object and
++/// NetworkSpawned with the scene, so <see cref="ShardId"/> / <see cref="DisplayName"/> can
++/// replicate (SyncFlags.FromHost) to clients for the HUD.
++///
++/// The host resolves its identity at boot (launch convar, then hostname, then editor default),
++/// loads the matching <see cref="ShardConfig"/>, and builds the <see cref="BackendClient"/>.
++/// Config, Backend and Secret stay host-side only and are never synced; clients only ever
++/// learn the shard's id and display name.
++/// </summary>
++public sealed class ShardContext : Component
++{
++	public const string Version = "0.1.0";
++
++	public static ShardContext? Current { get; private set; }
++
++	// Set by the launch arg `+subzero_shard A|B|C` (launch params are convars applied at boot).
++	// Read late (OnStart), with hostname and default fallbacks.
++	[ConVar( "subzero_shard" )] public static string ShardArg { get; set; } = "";
++
++	// Replicated to clients (safe to show). Never put the secret here.
++	[Sync( SyncFlags.FromHost )] public string ShardId { get; set; } = "A";
++	[Sync( SyncFlags.FromHost )] public string DisplayName { get; set; } = "Downtown";
++
++	/// <summary>Host's last-known backend reachability, mirrored to clients for the HUD.</summary>
++	[Sync( SyncFlags.FromHost )] public bool BackendOk { get; set; } = true;
++
++	// Host-only. Null on clients.
++	public ShardConfig? Config { get; private set; }
++	public BackendClient? Backend { get; private set; }
++
++	protected override void OnAwake()
++	{
++		Current = this;
++	}
++
++	protected override void OnStart()
++	{
++		// Only a dedicated server is a shard. Clients (and the editor) connect to one and get
++		// its id/name via sync; they never host a shard themselves.
++		if ( !Application.IsDedicatedServer )
++		{
++			Log.Info( $"[shard] client sees shard {ShardId} \"{DisplayName}\"" );
++			return;
++		}
++
++		var id = ResolveShardId();
++		Config = ShardConfig.Load( id );
++
++		ShardId = Config.ShardId;
++		DisplayName = Config.DisplayName;
++		Backend = new BackendClient( Config.BackendUrl, Config.Secret, Config.ShardId );
++
++		Log.Info( $"[shard] DEDICATED shard {ShardId} \"{DisplayName}\" -> backend {Config.BackendUrl}" );
++	}
++
++	private static string ResolveShardId()
++	{
++		// 1. launch convar +subzero_shard A
++		if ( !string.IsNullOrWhiteSpace( ShardArg ) )
++			return Normalize( ShardArg );
++
++		// 2. parse from the server hostname, e.g. "SubZero Shard B - Industrial"
++		try
++		{
++			var name = LaunchArguments.ServerName ?? "";
++			var idx = name.IndexOf( "Shard ", System.StringComparison.OrdinalIgnoreCase );
++			if ( idx >= 0 && idx + 6 < name.Length )
++			{
++				var c = char.ToUpperInvariant( name[idx + 6] );
++				if ( c is 'A' or 'B' or 'C' )
++					return c.ToString();
++			}
++		}
++		catch ( System.Exception e )
++		{
++			Log.Warning( $"[shard] hostname parse failed: {e.Message}" );
++		}
++
++		// 3. editor / single-instance default
++		return "A";
++	}
++
++	private static string Normalize( string s )
++	{
++		var t = s.Trim().ToUpperInvariant();
++		return t is "A" or "B" or "C" ? t : "A";
++	}
++}
+diff --git a/Code/Shared/Hmac.cs b/Code/Shared/Hmac.cs
+new file mode 100644
+index 0000000..4b5412d
+--- /dev/null
++++ b/Code/Shared/Hmac.cs
+@@ -0,0 +1,116 @@
++using System;
++using System.Text;
++
++namespace SubZeroShardDemo;
++
++/// <summary>
++/// HMAC-SHA256 for backend request signing. The s&box sandbox whitelist blocks
++/// System.Security.Cryptography.HMACSHA256 (SB1000), so this is a pure-managed
++/// implementation. It is byte-identical to the backend's BCL HMACSHA256 (verified against it),
++/// so signatures produced here validate server-side. Output is lowercase hex, matching
++/// backend/Crypto.cs (Convert.ToHexString is allowed by the whitelist).
++/// </summary>
++public static class Hmac
++{
++	public static string Hex( string secret, string message )
++	{
++		var hash = HmacSha256( Encoding.UTF8.GetBytes( secret ), Encoding.UTF8.GetBytes( message ) );
++		return Convert.ToHexString( hash ).ToLowerInvariant();
++	}
++
++	private const int BlockSize = 64;
++
++	private static byte[] HmacSha256( byte[] key, byte[] message )
++	{
++		if ( key.Length > BlockSize )
++			key = Sha256( key );
++
++		var block = new byte[BlockSize];
++		Array.Copy( key, block, key.Length );   // remaining bytes stay zero
++
++		var inner = new byte[BlockSize + message.Length];
++		var outerPrefix = new byte[BlockSize];
++		for ( int i = 0; i < BlockSize; i++ )
++		{
++			inner[i] = (byte)(block[i] ^ 0x36);
++			outerPrefix[i] = (byte)(block[i] ^ 0x5c);
++		}
++		Array.Copy( message, 0, inner, BlockSize, message.Length );
++
++		var innerHash = Sha256( inner );
++		var outer = new byte[BlockSize + innerHash.Length];
++		Array.Copy( outerPrefix, 0, outer, 0, BlockSize );
++		Array.Copy( innerHash, 0, outer, BlockSize, innerHash.Length );
++
++		return Sha256( outer );
++	}
++
++	private static readonly uint[] K =
++	{
++		0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
++		0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
++		0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
++		0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
++		0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
++		0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
++		0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
++		0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
++	};
++
++	private static byte[] Sha256( byte[] message )
++	{
++		uint h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
++		uint h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
++
++		int len = message.Length;
++		int totalLen = ((len + 9 + 63) / 64) * 64;   // message + 0x80 + 8-byte length, padded to 64
++		var data = new byte[totalLen];
++		Array.Copy( message, data, len );
++		data[len] = 0x80;
++		long bitLen = (long)len * 8;
++		for ( int i = 0; i < 8; i++ )
++			data[totalLen - 1 - i] = (byte)(bitLen >> (8 * i));
++
++		var w = new uint[64];
++		for ( int chunk = 0; chunk < totalLen; chunk += 64 )
++		{
++			for ( int i = 0; i < 16; i++ )
++			{
++				int j = chunk + i * 4;
++				w[i] = ((uint)data[j] << 24) | ((uint)data[j + 1] << 16) | ((uint)data[j + 2] << 8) | data[j + 3];
++			}
++			for ( int i = 16; i < 64; i++ )
++			{
++				uint s0 = Ror( w[i - 15], 7 ) ^ Ror( w[i - 15], 18 ) ^ (w[i - 15] >> 3);
++				uint s1 = Ror( w[i - 2], 17 ) ^ Ror( w[i - 2], 19 ) ^ (w[i - 2] >> 10);
++				w[i] = w[i - 16] + s0 + w[i - 7] + s1;
++			}
++
++			uint a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
++			for ( int i = 0; i < 64; i++ )
++			{
++				uint bigS1 = Ror( e, 6 ) ^ Ror( e, 11 ) ^ Ror( e, 25 );
++				uint ch = (e & f) ^ (~e & g);
++				uint t1 = h + bigS1 + ch + K[i] + w[i];
++				uint bigS0 = Ror( a, 2 ) ^ Ror( a, 13 ) ^ Ror( a, 22 );
++				uint maj = (a & b) ^ (a & c) ^ (b & c);
++				uint t2 = bigS0 + maj;
++				h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
++			}
++
++			h0 += a; h1 += b; h2 += c; h3 += d; h4 += e; h5 += f; h6 += g; h7 += h;
++		}
++
++		var hash = new byte[32];
++		WriteBE( hash, 0, h0 ); WriteBE( hash, 4, h1 ); WriteBE( hash, 8, h2 ); WriteBE( hash, 12, h3 );
++		WriteBE( hash, 16, h4 ); WriteBE( hash, 20, h5 ); WriteBE( hash, 24, h6 ); WriteBE( hash, 28, h7 );
++		return hash;
++	}
++
++	private static uint Ror( uint x, int n ) => (x >> n) | (x << (32 - n));
++
++	private static void WriteBE( byte[] b, int o, uint v )
++	{
++		b[o] = (byte)(v >> 24); b[o + 1] = (byte)(v >> 16); b[o + 2] = (byte)(v >> 8); b[o + 3] = (byte)v;
++	}
++}
+diff --git a/Code/Shared/TransferProtocol.cs b/Code/Shared/TransferProtocol.cs
+new file mode 100644
+index 0000000..7ebdc60
+--- /dev/null
++++ b/Code/Shared/TransferProtocol.cs
+@@ -0,0 +1,76 @@
++#nullable enable
++
++namespace SubZeroShardDemo;
++
++// Game-side mirror of the backend's wire contract (backend/Models.cs). Kept as a parallel
++// definition because the game and backend compile into separate assemblies. JSON shapes must
++// match; the backend reads case-insensitively and returns camelCase, and the BackendClient
++// deserializes case-insensitively, so property casing is not load-bearing.
++
++/// <summary>Signed envelope wrapping every request body.</summary>
++public sealed class Envelope
++{
++	public string Payload { get; set; } = "";
++	public string Sig { get; set; } = "";
++}
++
++// --- Requests ---
++public sealed record PlayerGetReq( string SteamId );
++public sealed record PlayerJoinReq( string SteamId, string ShardId );
++public sealed record ApplyLedgerReq( string SteamId, string TransferId, int Delta, string Reason );
++public sealed record HeartbeatReq( string ShardId, string ConnectHandle, int Players, int Capacity, string Version );
++public sealed record LookupReq( string ShardId );
++public sealed record PrepareReq( string SteamId, string SrcShard, string DstShard, string TransferId,
++	bool Handcuffed = false, string? CarriedItem = null, string Position = "" );
++public sealed record AcceptReq( string SteamId, string DstShard );
++public sealed record CancelReq( string SteamId, string TransferId );
++
++// --- Responses (classes with settable props for System.Text.Json) ---
++public sealed class PlayerDto
++{
++	public string SteamId { get; set; } = "";
++	public int Money { get; set; }
++	public string CarriedItem { get; set; } = "";
++	public bool Handcuffed { get; set; }
++	public string? CurrentShard { get; set; }
++	public string? InTransit { get; set; }
++	public string Position { get; set; } = "";
++}
++
++public sealed class OkResp
++{
++	public bool Ok { get; set; }
++	public string Reason { get; set; } = "";
++}
++
++public sealed class LedgerResp
++{
++	public bool Ok { get; set; }
++	public int Balance { get; set; }
++	public string Reason { get; set; } = "";
++}
++
++public sealed class LookupResp
++{
++	public string ShardId { get; set; } = "";
++	public string ConnectHandle { get; set; } = "";
++	public int Players { get; set; }
++	public int Capacity { get; set; }
++	public bool Up { get; set; }
++}
++
++public sealed class PrepareResp
++{
++	public bool Ok { get; set; }
++	public string Reason { get; set; } = "";
++	public string TransferId { get; set; } = "";
++	public string DstConnectHandle { get; set; } = "";
++	public System.DateTimeOffset ExpiresAt { get; set; }
++}
++
++public sealed class AcceptResp
++{
++	public bool Ok { get; set; }
++	public string Reason { get; set; } = "";
++	public PlayerDto? Snapshot { get; set; }
++}
+diff --git a/Code/Transfer/TransferService.cs b/Code/Transfer/TransferService.cs
+new file mode 100644
+index 0000000..db91c1b
+--- /dev/null
++++ b/Code/Transfer/TransferService.cs
+@@ -0,0 +1,217 @@
++#nullable enable
++
++using System.Threading.Tasks;
++using Sandbox;
++
++namespace SubZeroShardDemo;
++
++/// <summary>
++/// Host-side transfer coordinator. Two flows:
++///  - RequestTransfer (source): gate rules, toll ledger, prepare, then tell the client to
++///    reconnect to the destination lobby.
++///  - HandleArrival (destination): ask the backend whether this arrival is a transfer (accept)
++///    or a fresh join, then apply the authoritative snapshot.
++///
++/// Everything here is host-authoritative; the client only reconnects and shows denials.
++/// The money/item invariant is protected by the backend: the snapshot is taken at prepare
++/// (after any toll), applied once at accept, and a failed transfer falls back to a join that
++/// reloads the same authoritative record, so state is never duplicated and never lost.
++/// </summary>
++public sealed class TransferService : Component
++{
++	public const float CombatLockSeconds = 5f;
++	public const float CooldownSeconds = 3f;
++
++	public static TransferService? Current { get; private set; }
++
++	private float _nextOwnershipCheck;
++
++	protected override void OnAwake() => Current = this;
++
++	// Destination side: a player just became active on this shard.
++	public async Task HandleArrival( Connection conn, GameObject player )
++	{
++		var ctx = ShardContext.Current;
++		if ( ctx?.Backend is null )
++			return;
++
++		var steamId = conn.SteamId.ToString();
++		var wallet = player.Components.Get<PlayerWallet>();
++		var state = player.Components.Get<PlayerTestState>();
++
++		var accept = await ctx.Backend.Accept( steamId );
++		if ( accept is { Ok: true, Snapshot: not null } )
++		{
++			Apply( wallet, state, accept.Snapshot );
++			PlaceArrived( player, accept.Snapshot.Position );
++			Log.Info( $"[transfer] {steamId} ARRIVED via transfer on {ctx.ShardId} " +
++				$"(money={accept.Snapshot.Money}, item={accept.Snapshot.CarriedItem}, pos={accept.Snapshot.Position})" );
++			return;
++		}
++
++		// Not a transfer (or it was abandoned): normal join.
++		var rec = await ctx.Backend.PlayerJoin( steamId );
++		if ( rec is not null )
++			Apply( wallet, state, rec );
++		ShardNetwork.Current?.PlaceAt( player, arrival: false );
++		Log.Info( $"[transfer] {steamId} joined {ctx.ShardId} normally (money={rec?.Money})" );
++	}
++
++	private static void Apply( PlayerWallet? wallet, PlayerTestState? state, PlayerDto dto )
++	{
++		wallet?.SetAuthoritative( dto.Money );
++		state?.ApplyFromSnapshot( dto.Handcuffed, dto.CarriedItem );
++	}
++
++	// Arrive where you left off: place the player at the position carried in the snapshot
++	// (all shards share the scene, so the same coords map to the same place). Falls back to
++	// the arrival point if there is no carried position.
++	private static void PlaceArrived( GameObject player, string position )
++	{
++		if ( !string.IsNullOrEmpty( position ) )
++		{
++			try
++			{
++				player.WorldPosition = Vector3.Parse( position );
++				return;
++			}
++			catch ( System.Exception ) { }
++		}
++
++		ShardNetwork.Current?.PlaceAt( player, arrival: true );
++	}
++
++	// Source side: player walked into a transition zone (or pressed a button).
++	public async Task RequestTransfer( GameObject player, string targetShard, TransferRule rule, int tollAmount )
++	{
++		if ( !Networking.IsHost )
++			return;
++
++		var ctx = ShardContext.Current;
++		var transfer = player.Components.Get<PlayerTransfer>();
++		if ( ctx?.Backend is null || ctx.Config is null )
++		{
++			transfer?.ShowDenied( "backend unavailable" );
++			return;
++		}
++
++		var owner = player.Network.Owner;
++		if ( owner is null )
++			return;
++		var steamId = owner.SteamId.ToString();
++		var wallet = player.Components.Get<PlayerWallet>();
++		var state = player.Components.Get<PlayerTestState>();
++
++		// Gate rules.
++		var (ok, reason) = EvaluateGate( state, wallet, rule, targetShard, ctx.ShardId );
++		if ( !ok )
++		{
++			Log.Info( $"[transfer] {steamId} {ctx.ShardId}->{targetShard} DENIED: {reason}" );
++			transfer?.ShowDenied( reason );
++			return;
++		}
++
++		state?.MarkTransferAttempt();   // cooldown stamp, even on later failure (anti-spam)
++
++		var transferId = $"{ctx.ShardId}:{System.Guid.NewGuid():N}";
++
++		// Toll: deduct exactly once before prepare so the snapshot reflects post-toll money.
++		if ( rule == TransferRule.Toll )
++		{
++			var led = await ctx.Backend.ApplyLedger( steamId, transferId, -tollAmount, "toll" );
++			if ( led is null || !led.Ok )
++			{
++				transfer?.ShowDenied( led?.Reason ?? "toll failed" );
++				return;
++			}
++			wallet?.SetAuthoritative( led.Balance );
++		}
++
++		// Prepare (backend validates on-src, not-in-transit, dst up and not full).
++		// Report the shard's live cuffs/item so they travel with the player.
++		var prep = await ctx.Backend.Prepare( steamId, targetShard, transferId,
++			state?.Handcuffed ?? false, state?.CarriedItem ?? "", player.WorldPosition.ToString() );
++		if ( prep is null || !prep.Ok )
++		{
++			// refund the toll (distinct ledger id, so it isn't deduped against the charge)
++			if ( rule == TransferRule.Toll )
++			{
++				var refund = await ctx.Backend.ApplyLedger( steamId, transferId + ":refund", tollAmount, "toll-refund" );
++				if ( refund is not null )
++					wallet?.SetAuthoritative( refund.Balance );
++			}
++			transfer?.ShowDenied( prep?.Reason ?? "backend unreachable" );
++			return;
++		}
++
++		// Tell the client to reconnect; the client resolves the target shard's lobby.
++		Log.Info( $"[transfer] {steamId} {ctx.ShardId}->{targetShard} prepared {transferId}; reconnecting client" );
++		transfer?.BeginReconnect( targetShard, "" );
++	}
++
++	/// <summary>Evaluate the transfer gate rules. Returns (allowed, denialReason).</summary>
++	public static (bool ok, string reason) EvaluateGate(
++		PlayerTestState? state, PlayerWallet? wallet, TransferRule rule, string targetShard, string srcShard )
++	{
++		if ( state is null || wallet is null )
++			return (false, "player state missing");
++
++		// Handcuffed players may only use a Prisoner pad.
++		if ( state.Handcuffed && rule != TransferRule.Prisoner )
++			return (false, "handcuffed - jail only");
++
++		if ( rule == TransferRule.Prisoner )
++		{
++			// Prisoner pad requires being handcuffed; routes to Jail (C).
++			return state.Handcuffed
++				? (true, "")
++				: (false, "not handcuffed");
++		}
++
++		// Normal / Toll: combat lock + cooldown.
++		if ( state.TimeSinceCombat < CombatLockSeconds )
++			return (false, $"in combat ({CombatLockSeconds - state.TimeSinceCombat:0.0}s)");
++
++		if ( state.TimeSinceTransfer < CooldownSeconds )
++			return (false, $"cooldown ({CooldownSeconds - state.TimeSinceTransfer:0.0}s)");
++
++		if ( rule == TransferRule.Toll && wallet.Money < 100 )
++			return (false, "need $100");
++
++		return (true, "");
++	}
++
++	// Duplicate-login guard (rule: newest connection wins). Periodically the shard asks the
++	// backend who owns each local player; if the backend says a player now belongs elsewhere
++	// (and is not mid-transfer), this stale shard kicks them.
++	protected override void OnUpdate()
++	{
++		if ( !Application.IsDedicatedServer )
++			return;
++		if ( Time.Now < _nextOwnershipCheck )
++			return;
++		_nextOwnershipCheck = Time.Now + 10f;
++		_ = ValidateOwnership();
++	}
++
++	private async Task ValidateOwnership()
++	{
++		var ctx = ShardContext.Current;
++		if ( ctx?.Backend is null )
++			return;
++
++		foreach ( var conn in Connection.All )
++		{
++			var rec = await ctx.Backend.PlayerGet( conn.SteamId.ToString() );
++			if ( rec is null )
++				continue;
++
++			if ( rec.CurrentShard is not null && rec.CurrentShard != ctx.ShardId
++				&& string.IsNullOrEmpty( rec.InTransit ) )
++			{
++				Log.Info( $"[transfer] {conn.SteamId} now owned by {rec.CurrentShard}, kicking (newest wins)" );
++				try { conn.Kick( "signed in on another shard" ); } catch { }
++			}
++		}
++	}
++}
+diff --git a/Code/UI/DebugHud.razor b/Code/UI/DebugHud.razor
+new file mode 100644
+index 0000000..c0283e2
+--- /dev/null
++++ b/Code/UI/DebugHud.razor
+@@ -0,0 +1,101 @@
++@using System
++@using System.Linq
++@using Sandbox
++@using Sandbox.UI
++@using SubZeroShardDemo
++@inherits PanelComponent
++
++@*
++    Debug HUD. Attach to a GameObject that also has a ScreenPanel component. Shows the current
++    shard (big banner), money, carried item, flags, backend status, and the latest denial.
++    Reads synced state, so it works on the client viewing whichever shard it's connected to.
++*@
++
++<root style="width:100%; height:100%;">
++
++    <div style="position:absolute; top:0; left:0; width:100%; height:64px;
++                justify-content:center; align-items:center;
++                background-color:@BannerColor; color:white; font-size:34px; font-weight:bold;">
++        @($"SHARD {ShardId} - {DisplayName}")
++    </div>
++
++    <div style="position:absolute; top:80px; left:20px; flex-direction:column;
++                background-color:rgba(0,0,0,0.65); padding:14px; min-width:260px;
++                color:white; font-size:18px;">
++        <div style="flex-direction:row; justify-content:space-between;">
++            <label>Money</label><label style="color:#7CFC7C;">$@Money</label>
++        </div>
++        <div style="flex-direction:row; justify-content:space-between;">
++            <label>Item</label><label>@ItemText</label>
++        </div>
++        <div style="flex-direction:row; justify-content:space-between;">
++            <label>Handcuffed</label><label style="color:@(Cuffed ? "#ff8080" : "#aaaaaa");">@(Cuffed ? "YES" : "no")</label>
++        </div>
++        <div style="flex-direction:row; justify-content:space-between;">
++            <label>Combat</label><label style="color:@(InCombat ? "#ff8080" : "#aaaaaa");">@CombatText</label>
++        </div>
++        <div style="flex-direction:row; justify-content:space-between;">
++            <label>Backend</label><label style="color:@(BackendOk ? "#7CFC7C" : "#ff5050");">@(BackendOk ? "connected" : "UNREACHABLE")</label>
++        </div>
++    </div>
++
++    @if ( ShowDenial )
++    {
++        <div style="position:absolute; top:45%; left:0; width:100%; justify-content:center;">
++            <label style="background-color:rgba(150,0,0,0.85); color:white; padding:12px 20px;
++                          font-size:22px; font-weight:bold;">TRANSFER DENIED - @Denial</label>
++        </div>
++    }
++
++    @if ( !string.IsNullOrEmpty( LookPrompt ) )
++    {
++        <div style="position:absolute; bottom:90px; left:0; width:100%; justify-content:center;">
++            <label style="background-color:rgba(0,0,0,0.8); color:white; padding:12px 22px;
++                          font-size:20px;">@LookPrompt</label>
++        </div>
++    }
++
++</root>
++
++@code {
++	private ShardContext Ctx => ShardContext.Current;
++
++	private PlayerController LocalPlayer =>
++		Game.ActiveScene?.GetAllComponents<PlayerController>().FirstOrDefault( p => !p.GameObject.IsProxy );
++
++	private PlayerWallet Wallet => LocalPlayer?.Components.Get<PlayerWallet>();
++	private PlayerTestState State => LocalPlayer?.Components.Get<PlayerTestState>();
++	private PlayerTransfer Transfer => LocalPlayer?.Components.Get<PlayerTransfer>();
++
++	private string ShardId => Ctx?.ShardId ?? "?";
++	private string DisplayName => (Ctx?.DisplayName ?? "").ToUpper();
++	private bool BackendOk => Ctx?.BackendOk ?? false;
++
++	private int Money => Wallet?.Money ?? 0;
++	private bool Cuffed => State?.Handcuffed ?? false;
++	private string ItemText => string.IsNullOrEmpty( State?.CarriedItem ) ? "(none)" : State!.CarriedItem;
++
++	private bool InCombat => (State?.TimeSinceCombat ?? 9999f) < TransferService.CombatLockSeconds;
++	private string CombatText => InCombat
++		? $"IN COMBAT ({TransferService.CombatLockSeconds - State!.TimeSinceCombat:0.0}s)"
++		: "-";
++
++	private bool ShowDenial => Transfer is not null
++		&& !string.IsNullOrEmpty( Transfer.LastDenial )
++		&& (Time.Now - Transfer.LastDenialAt) < 4f;
++	private string Denial => Transfer?.LastDenial ?? "";
++
++	private string LookPrompt => TransitionButton.LookPrompt ?? "";
++
++	private string BannerColor => ShardId switch
++	{
++		"B" => "#e08a1e",   // Industrial, orange
++		"C" => "#c0392b",   // Jail, red
++		_ => "#2d6cdf",     // Downtown, blue
++	};
++
++	protected override int BuildHash() => HashCode.Combine(
++		ShardId, Money, Cuffed, ItemText, BackendOk,
++		(int)(State?.TimeSinceCombat ?? 9999f), ShowDenial,
++		HashCode.Combine( Denial, LookPrompt ) );
++}
+diff --git a/Code/UI/DebugHud.razor.scss b/Code/UI/DebugHud.razor.scss
+new file mode 100644
+index 0000000..69c131f
+--- /dev/null
++++ b/Code/UI/DebugHud.razor.scss
+@@ -0,0 +1,2 @@
++// Styles for DebugHud live inline on the elements (see DebugHud.razor).
++// This file exists so the engine doesn't warn about a missing sibling stylesheet.
+diff --git a/Code/World/TransitionButton.cs b/Code/World/TransitionButton.cs
+new file mode 100644
+index 0000000..cb5779c
+--- /dev/null
++++ b/Code/World/TransitionButton.cs
+@@ -0,0 +1,48 @@
++#nullable enable
++
++using Sandbox;
++
++namespace SubZeroShardDemo;
++
++/// <summary>
++/// A pressable transfer button. Look at it (the HUD shows a prompt) and press the use key (E)
++/// to request a transfer to <see cref="TargetShard"/>. Replaces the walk-in TransitionZone.
++///
++/// Author on a GameObject with a (non-trigger) Collider so the player's press-trace can hit
++/// it. The press is routed to the host via <see cref="PlayerTransfer.RequestTransferHost"/> so
++/// the gate rules and prepare stay host-authoritative.
++/// </summary>
++public sealed class TransitionButton : Component, Component.IPressable
++{
++	[Property] public string TargetShard { get; set; } = "B";
++	[Property] public TransferRule Rule { get; set; } = TransferRule.Normal;
++	[Property] public int TollAmount { get; set; } = 100;
++
++	/// <summary>Prompt for the button the local client is currently looking at (null if none).
++	/// Read by DebugHud to show the popup.</summary>
++	public static string? LookPrompt { get; private set; }
++
++	public string Description => Rule switch
++	{
++		TransferRule.Toll => $"Travel to Shard {TargetShard} - Toll ${TollAmount}",
++		TransferRule.Prisoner => $"Prisoner transport to Shard {TargetShard}",
++		_ => $"Travel to Shard {TargetShard}",
++	};
++
++	public bool CanPress( Component.IPressable.Event e ) => true;
++
++	public bool Press( Component.IPressable.Event e )
++	{
++		// Runs on the presser's client. Route to the host through the player's PlayerTransfer.
++		var agent = e.Source?.GameObject?.Components.GetInAncestorsOrSelf<PlayerTransfer>();
++		if ( agent is null )
++			return false;
++
++		agent.RequestTransferHost( TargetShard, (int)Rule, TollAmount );
++		return true;
++	}
++
++	// Look-at popup: set the shared prompt while looking, clear it when looking away.
++	public void Hover( Component.IPressable.Event e ) => LookPrompt = $"{Description}   [Press E]";
++	public void Blur( Component.IPressable.Event e ) => LookPrompt = null;
++}
+diff --git a/Code/World/TransitionZone.cs b/Code/World/TransitionZone.cs
+new file mode 100644
+index 0000000..ab836ad
+--- /dev/null
++++ b/Code/World/TransitionZone.cs
+@@ -0,0 +1,38 @@
++using Sandbox;
++
++namespace SubZeroShardDemo;
++
++public enum TransferRule
++{
++	/// <summary>Standard pad: not handcuffed, not in combat, cooldown ok.</summary>
++	Normal,
++	/// <summary>Like Normal, plus costs <see cref="TransitionZone.TollAmount"/> (deducted once).</summary>
++	Toll,
++	/// <summary>Jail pad: requires the player to be handcuffed; routes them to Jail (C).</summary>
++	Prisoner,
++}
++
++/// <summary>
++/// A trigger volume that requests a transfer to <see cref="TargetShard"/> when a player walks
++/// in. Author it on a GameObject that also has a Collider with IsTrigger = true. Host-only:
++/// the gate and prepare all run host-side.
++/// </summary>
++public sealed class TransitionZone : Component, Component.ITriggerListener
++{
++	[Property] public string TargetShard { get; set; } = "B";
++	[Property] public TransferRule Rule { get; set; } = TransferRule.Normal;
++	[Property] public int TollAmount { get; set; } = 100;
++
++	void Component.ITriggerListener.OnTriggerEnter( Collider other )
++	{
++		if ( !Networking.IsHost )
++			return;
++
++		// Find the player root from whatever collider entered (feet, body, etc).
++		var agent = other.GameObject.Components.GetInAncestorsOrSelf<PlayerTransfer>();
++		if ( agent is null )
++			return;
++
++		_ = TransferService.Current?.RequestTransfer( agent.GameObject, TargetShard, Rule, TollAmount );
++	}
++}
+diff --git a/backend/Crypto.cs b/backend/Crypto.cs
+new file mode 100644
+index 0000000..0e95931
+--- /dev/null
++++ b/backend/Crypto.cs
+@@ -0,0 +1,28 @@
++using System.Security.Cryptography;
++using System.Text;
++
++namespace SubZeroShardBackend;
++
++/// <summary>
++/// HMAC-SHA256 request authentication. Every request body is a signed envelope
++/// { "payload": "&lt;json&gt;", "sig": "&lt;hex&gt;" } where sig = HMAC-SHA256(secret, payload).
++/// The body is signed (not a header) so the game side never needs custom HTTP headers.
++/// </summary>
++public static class Crypto
++{
++	public static string HmacHex( string secret, string message )
++	{
++		using var h = new HMACSHA256( Encoding.UTF8.GetBytes( secret ) );
++		var hash = h.ComputeHash( Encoding.UTF8.GetBytes( message ) );
++		return Convert.ToHexString( hash ).ToLowerInvariant();
++	}
++
++	/// <summary>Constant-time comparison so a bad signature can't be timed.</summary>
++	public static bool Verify( string secret, string message, string? sigHex )
++	{
++		var expected = HmacHex( secret, message );
++		return CryptographicOperations.FixedTimeEquals(
++			Encoding.UTF8.GetBytes( expected ),
++			Encoding.UTF8.GetBytes( sigHex ?? "" ) );
++	}
++}
+diff --git a/backend/Models.cs b/backend/Models.cs
+new file mode 100644
+index 0000000..2911dc5
+--- /dev/null
++++ b/backend/Models.cs
+@@ -0,0 +1,90 @@
++namespace SubZeroShardBackend;
++
++// Wire envelope (all requests). payload is the JSON of the real request DTO,
++// sig is HMAC-SHA256(secret, payload).
++public sealed record Envelope( string Payload, string Sig );
++
++// Domain state (persisted).
++
++/// <summary>Authoritative shared player state, keyed by SteamId64.</summary>
++public sealed class PlayerRecord
++{
++	public string SteamId { get; set; } = "";
++	public int Money { get; set; }
++	public string CarriedItem { get; set; } = "";
++	public bool Handcuffed { get; set; }
++
++	/// <summary>Last exit position "x,y,z", carried across shards so you arrive where you left.</summary>
++	public string Position { get; set; } = "";
++
++	/// <summary>"A"/"B"/"C" or null if not currently on any shard.</summary>
++	public string? CurrentShard { get; set; }
++
++	/// <summary>TransferId the player is mid-transfer under, or null.</summary>
++	public string? InTransit { get; set; }
++
++	/// <summary>Ledger transferIds already applied (exact-once money deltas).</summary>
++	public HashSet<string> AppliedTransferIds { get; set; } = new();
++}
++
++/// <summary>A prepared transfer, single-use token record. Lives server-side only.</summary>
++public sealed class TransferToken
++{
++	public string TransferId { get; set; } = "";
++	public string SteamId { get; set; } = "";
++	public string SrcShard { get; set; } = "";
++	public string DstShard { get; set; } = "";
++
++	// Snapshot taken at prepare time.
++	public int Money { get; set; }
++	public string CarriedItem { get; set; } = "";
++	public bool Handcuffed { get; set; }
++	public string Position { get; set; } = "";
++
++	public DateTimeOffset IssuedAt { get; set; }
++	public DateTimeOffset ExpiresAt { get; set; }
++	public string Nonce { get; set; } = "";
++	public bool Consumed { get; set; }
++	public bool Expired { get; set; }
++
++	/// <summary>HMAC over the compact token payload, proves the backend issued it.</summary>
++	public string Signature { get; set; } = "";
++}
++
++/// <summary>Server directory entry, refreshed by heartbeats.</summary>
++public sealed class ShardEntry
++{
++	public string ShardId { get; set; } = "";
++	public string ConnectHandle { get; set; } = "";   // Steam lobby id (runtime)
++	public int Players { get; set; }
++	public int Capacity { get; set; }
++	public string Version { get; set; } = "";
++	public DateTimeOffset LastHeartbeat { get; set; }
++}
++
++// Request DTOs (the decoded `payload`).
++public sealed record PlayerGetReq( string SteamId );
++public sealed record PlayerJoinReq( string SteamId, string ShardId );
++public sealed record ApplyLedgerReq( string SteamId, string TransferId, int Delta, string Reason );
++public sealed record HeartbeatReq( string ShardId, string ConnectHandle, int Players, int Capacity, string Version );
++public sealed record LookupReq( string ShardId );
++// Handcuffed/CarriedItem are the source shard's live values (the shard is authoritative for
++// them while the player is on it); the backend snapshots them here. CarriedItem null = leave
++// unchanged. Money is not passed; it stays ledger-authoritative in the backend.
++public sealed record PrepareReq( string SteamId, string SrcShard, string DstShard, string TransferId,
++	bool Handcuffed = false, string? CarriedItem = null, string Position = "" );
++// No TransferId: the dst shard only knows the arriving SteamId. The backend resolves the
++// transfer via the player's own InTransit record (minted on the source shard at prepare).
++public sealed record AcceptReq( string SteamId, string DstShard );
++public sealed record CancelReq( string SteamId, string TransferId );
++
++// Response DTOs.
++public sealed record PlayerDto( string SteamId, int Money, string CarriedItem, bool Handcuffed,
++	string? CurrentShard, string? InTransit, string Position = "" );
++
++public sealed record OkResp( bool Ok, string Reason = "" );
++public sealed record LedgerResp( bool Ok, int Balance, string Reason = "" );
++public sealed record LookupResp( string ShardId, string ConnectHandle, int Players, int Capacity, bool Up );
++public sealed record PrepareResp( bool Ok, string Reason, string TransferId, string DstConnectHandle,
++	DateTimeOffset ExpiresAt );
++public sealed record AcceptResp( bool Ok, string Reason, PlayerDto? Snapshot );
+diff --git a/backend/Program.cs b/backend/Program.cs
+new file mode 100644
+index 0000000..0ed29e4
+--- /dev/null
++++ b/backend/Program.cs
+@@ -0,0 +1,122 @@
++using System.Text;
++using System.Text.Json;
++using SubZeroShardBackend;
++
++// SubZeroShardDemo backend: shared player store, server directory and transfer coordinator.
++// Runs on http://localhost:8443. Every request is an HMAC-signed envelope { payload, sig }.
++// See Store.cs for the state machine.
++
++var secret = Environment.GetEnvironmentVariable( "SHARD_DEMO_SECRET" ) ?? Store.DefaultSecret;
++// Port 8443 (not 8080): 8080 is commonly taken (e.g. NVIDIA Broadcast), and 8443 is the other
++// port on s&box's localhost HTTP allowlist (80/443/8080/8443), so the editor can reach the
++// backend without needing -allowlocalhttp, and dedicated servers work too.
++var url = Environment.GetEnvironmentVariable( "SHARD_DEMO_BACKEND_URL" ) ?? "http://localhost:8443";
++var dataFile = Path.Combine( Directory.GetCurrentDirectory(), "data", "state.json" );
++
++void Log( string m ) => Console.WriteLine( $"{DateTimeOffset.Now:HH:mm:ss} {m}" );
++
++var store = Store.LoadOrCreate( dataFile, Log );
++store.Secret = secret;
++
++var builder = WebApplication.CreateBuilder( args );
++builder.Logging.ClearProviders();               // concise custom logging only
++var app = builder.Build();
++
++var jsonOpts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
++
++// Read the raw body, verify the HMAC envelope, deserialize the inner payload to T.
++async Task<(T? val, IResult? err)> Read<T>( HttpContext ctx )
++{
++	using var reader = new StreamReader( ctx.Request.Body, Encoding.UTF8 );
++	var body = await reader.ReadToEndAsync();
++
++	Envelope? env;
++	try { env = JsonSerializer.Deserialize<Envelope>( body, jsonOpts ); }
++	catch { return (default, Results.BadRequest( new OkResp( false, "bad envelope" ) )); }
++
++	if ( env is null || env.Payload is null || env.Sig is null )
++		return (default, Results.BadRequest( new OkResp( false, "bad envelope" ) ));
++
++	if ( !Crypto.Verify( secret, env.Payload, env.Sig ) )
++	{
++		Log( "[auth] rejected request with bad signature" );
++		return (default, Results.Json( new OkResp( false, "bad signature" ), statusCode: 401 ));
++	}
++
++	try
++	{
++		var val = JsonSerializer.Deserialize<T>( env.Payload, jsonOpts );
++		if ( val is null )
++			return (default, Results.BadRequest( new OkResp( false, "bad payload" ) ));
++		return (val, null);
++	}
++	catch { return (default, Results.BadRequest( new OkResp( false, "bad payload" ) )); }
++}
++
++app.MapGet( "/health", () => Results.Json( new { ok = true, service = "subzero-shard-backend" } ) );
++
++app.MapPost( "/player/get", async ( HttpContext c ) =>
++{
++	var (r, err) = await Read<PlayerGetReq>( c ); if ( err != null ) return err;
++	return Results.Json( store.PlayerGet( r! ) );
++} );
++
++app.MapPost( "/player/join", async ( HttpContext c ) =>
++{
++	var (r, err) = await Read<PlayerJoinReq>( c ); if ( err != null ) return err;
++	return Results.Json( store.PlayerJoin( r! ) );
++} );
++
++app.MapPost( "/player/apply-ledger", async ( HttpContext c ) =>
++{
++	var (r, err) = await Read<ApplyLedgerReq>( c ); if ( err != null ) return err;
++	return Results.Json( store.ApplyLedger( r! ) );
++} );
++
++app.MapPost( "/directory/heartbeat", async ( HttpContext c ) =>
++{
++	var (r, err) = await Read<HeartbeatReq>( c ); if ( err != null ) return err;
++	return Results.Json( store.Heartbeat( r! ) );
++} );
++
++app.MapPost( "/directory/lookup", async ( HttpContext c ) =>
++{
++	var (r, err) = await Read<LookupReq>( c ); if ( err != null ) return err;
++	return Results.Json( store.Lookup( r! ) );
++} );
++
++app.MapPost( "/transfer/prepare", async ( HttpContext c ) =>
++{
++	var (r, err) = await Read<PrepareReq>( c ); if ( err != null ) return err;
++	return Results.Json( store.Prepare( r! ) );
++} );
++
++app.MapPost( "/transfer/accept", async ( HttpContext c ) =>
++{
++	var (r, err) = await Read<AcceptReq>( c ); if ( err != null ) return err;
++	return Results.Json( store.Accept( r! ) );
++} );
++
++app.MapPost( "/transfer/cancel", async ( HttpContext c ) =>
++{
++	var (r, err) = await Read<CancelReq>( c ); if ( err != null ) return err;
++	return Results.Json( store.Cancel( r! ) );
++} );
++
++// Test-only: force the player's in-flight token to be expired, so the token-expiry test is
++// instant instead of a 30s wait. Still HMAC-gated.
++app.MapPost( "/debug/force-expire", async ( HttpContext c ) =>
++{
++	var (r, err) = await Read<PlayerGetReq>( c ); if ( err != null ) return err;
++	return Results.Json( new OkResp( store.ForceExpireInTransit( r!.SteamId ), "forced-expire" ) );
++} );
++
++// Expire stale tokens + auto-revert their InTransit locks every 5s.
++using var sweeper = new Timer( _ => store.SweepExpired(), null,
++	TimeSpan.FromSeconds( 5 ), TimeSpan.FromSeconds( 5 ) );
++
++Log( $"[boot] SubZeroShardDemo backend on {url}" );
++Log( $"[boot] secret: {(secret == Store.DefaultSecret ? "default demo secret (config/shard.*.json)" : "from SHARD_DEMO_SECRET env")}" );
++Log( $"[boot] data file: {dataFile}" );
++
++app.Run( url );
+diff --git a/backend/Store.cs b/backend/Store.cs
+new file mode 100644
+index 0000000..dabc7c5
+--- /dev/null
++++ b/backend/Store.cs
+@@ -0,0 +1,405 @@
++using System.Text.Json;
++
++namespace SubZeroShardBackend;
++
++/// <summary>
++/// In-memory authoritative store with JSON-file durability. All public methods lock a single
++/// mutex; traffic is tiny (a few shards) so coarse locking is fine and keeps the transfer
++/// state machine obviously correct.
++///
++/// Invariant this whole class exists to protect: a player's Money and CarriedItem are never
++/// duplicated and never lost, across every transfer / failure path. Because shared state is
++/// keyed by SteamId here (not on any shard's disk), even a failed transfer cannot lose money:
++/// a fresh join on any shard reloads the authoritative record.
++/// </summary>
++public sealed class Store
++{
++	public const int StartingMoney = 500;
++	public const string StartingItem = "briefcase";
++	public const int TokenTtlSeconds = 30;
++	public const int HeartbeatStaleSeconds = 15;
++
++	// Same value as config/shard.*.json so the demo runs out-of-the-box. Override with the
++	// SHARD_DEMO_SECRET env var (set on both backend and shards) for anything real.
++	public const string DefaultSecret = "fb1976e069994f08a3f0725eb5ba9051ecd5159ab74cce1f2cdf6cad56bfa45d";
++
++	public string Secret { get; set; } = DefaultSecret;
++
++	private readonly object _lock = new();
++	private readonly Dictionary<string, PlayerRecord> _players = new();
++	private readonly Dictionary<string, ShardEntry> _shards = new();
++	private readonly Dictionary<string, TransferToken> _tokens = new();
++
++	private readonly string _dataFile;
++	private readonly Action<string> _log;
++
++	public Store( string dataFile, Action<string> log )
++	{
++		_dataFile = dataFile;
++		_log = log;
++	}
++
++	// Time seam: overridable so tests can force "expired". Defaults to real time.
++	public Func<DateTimeOffset> Now { get; set; } = () => DateTimeOffset.UtcNow;
++
++	private bool IsUp( ShardEntry e ) => (Now() - e.LastHeartbeat).TotalSeconds < HeartbeatStaleSeconds;
++	private static bool IsFull( ShardEntry e ) => e.Players >= e.Capacity;
++
++	private PlayerRecord GetOrCreate( string steamId )
++	{
++		if ( _players.TryGetValue( steamId, out var p ) )
++			return p;
++
++		p = new PlayerRecord
++		{
++			SteamId = steamId,
++			Money = StartingMoney,
++			CarriedItem = StartingItem,
++			Handcuffed = false,
++			CurrentShard = null,
++			InTransit = null,
++		};
++		_players[steamId] = p;
++		_log( $"[player] created {steamId} (money={StartingMoney}, item={StartingItem})" );
++		return p;
++	}
++
++	private static PlayerDto ToDto( PlayerRecord p ) =>
++		new( p.SteamId, p.Money, p.CarriedItem, p.Handcuffed, p.CurrentShard, p.InTransit, p.Position );
++
++	// Player.
++	public PlayerDto PlayerGet( PlayerGetReq r )
++	{
++		lock ( _lock )
++			return ToDto( GetOrCreate( r.SteamId ) );
++	}
++
++	/// <summary>
++	/// Normal (non-transfer) arrival on a shard. Sets CurrentShard. Duplicate-login rule:
++	/// newest connection wins, so CurrentShard is reassigned to the joining shard. Any dangling
++	/// InTransit is cleared (a normal join means the player is not mid-transfer here).
++	/// </summary>
++	public PlayerDto PlayerJoin( PlayerJoinReq r )
++	{
++		lock ( _lock )
++		{
++			var p = GetOrCreate( r.SteamId );
++			var prev = p.CurrentShard;
++			p.CurrentShard = r.ShardId;
++			p.InTransit = null;
++			Save();
++			if ( prev is not null && prev != r.ShardId )
++				_log( $"[player] {r.SteamId} joined {r.ShardId} (was {prev}), newest-wins" );
++			else
++				_log( $"[player] {r.SteamId} joined {r.ShardId}" );
++			return ToDto( p );
++		}
++	}
++
++	/// <summary>Applies a money delta exactly once (dedupe on transferId). Used for tolls.</summary>
++	public LedgerResp ApplyLedger( ApplyLedgerReq r )
++	{
++		lock ( _lock )
++		{
++			var p = GetOrCreate( r.SteamId );
++
++			if ( p.AppliedTransferIds.Contains( r.TransferId ) )
++			{
++				_log( $"[ledger] {r.SteamId} {r.TransferId} already applied, no-op (bal={p.Money})" );
++				return new LedgerResp( true, p.Money, "already-applied" );
++			}
++
++			if ( r.Delta < 0 && p.Money + r.Delta < 0 )
++			{
++				_log( $"[ledger] {r.SteamId} {r.TransferId} DENIED insufficient (bal={p.Money}, delta={r.Delta})" );
++				return new LedgerResp( false, p.Money, "insufficient-funds" );
++			}
++
++			p.Money += r.Delta;
++			p.AppliedTransferIds.Add( r.TransferId );
++			Save();
++			_log( $"[ledger] {r.SteamId} {r.TransferId} delta={r.Delta} ({r.Reason}) -> bal={p.Money}" );
++			return new LedgerResp( true, p.Money );
++		}
++	}
++
++	// Directory.
++	public OkResp Heartbeat( HeartbeatReq r )
++	{
++		lock ( _lock )
++		{
++			if ( !_shards.TryGetValue( r.ShardId, out var e ) )
++			{
++				e = new ShardEntry { ShardId = r.ShardId };
++				_shards[r.ShardId] = e;
++			}
++			e.ConnectHandle = r.ConnectHandle;
++			e.Players = r.Players;
++			e.Capacity = r.Capacity;
++			e.Version = r.Version;
++			e.LastHeartbeat = Now();
++			// heartbeats are transient, not persisted.
++			return new OkResp( true );
++		}
++	}
++
++	public LookupResp Lookup( LookupReq r )
++	{
++		lock ( _lock )
++		{
++			if ( _shards.TryGetValue( r.ShardId, out var e ) )
++				return new LookupResp( e.ShardId, e.ConnectHandle, e.Players, e.Capacity, IsUp( e ) );
++
++			return new LookupResp( r.ShardId, "", 0, 0, false );
++		}
++	}
++
++	// Transfer state machine.
++	public PrepareResp Prepare( PrepareReq r )
++	{
++		lock ( _lock )
++		{
++			var p = GetOrCreate( r.SteamId );
++
++			if ( p.InTransit is not null )
++				return Deny( $"already in transit ({p.InTransit})" );
++
++			if ( p.CurrentShard != r.SrcShard )
++				return Deny( $"not on source shard (backend says {p.CurrentShard ?? "none"})" );
++
++			if ( !_shards.TryGetValue( r.DstShard, out var dst ) || !IsUp( dst ) )
++				return Deny( "destination down" );
++
++			if ( IsFull( dst ) )
++				return Deny( "destination full" );
++
++			// Snapshot the source shard's live cuffs/item into the authoritative record; money
++			// stays ledger-authoritative (already correct here).
++			p.Handcuffed = r.Handcuffed;
++			if ( r.CarriedItem is not null )
++				p.CarriedItem = r.CarriedItem;
++			if ( !string.IsNullOrEmpty( r.Position ) )
++				p.Position = r.Position;
++
++			var now = Now();
++			var token = new TransferToken
++			{
++				TransferId = r.TransferId,
++				SteamId = r.SteamId,
++				SrcShard = r.SrcShard,
++				DstShard = r.DstShard,
++				Money = p.Money,
++				CarriedItem = p.CarriedItem,
++				Handcuffed = p.Handcuffed,
++				Position = p.Position,
++				IssuedAt = now,
++				ExpiresAt = now.AddSeconds( TokenTtlSeconds ),
++				Nonce = Guid.NewGuid().ToString( "N" ),
++			};
++			token.Signature = SignToken( token );
++			_tokens[r.TransferId] = token;
++			p.InTransit = r.TransferId;
++			Save();
++
++			_log( $"[transfer] PREPARE {r.TransferId} {r.SteamId} {r.SrcShard}->{r.DstShard} " +
++				$"snapshot(money={token.Money},item={token.CarriedItem},cuffs={token.Handcuffed}) ttl={TokenTtlSeconds}s" );
++			return new PrepareResp( true, "", r.TransferId, dst.ConnectHandle, token.ExpiresAt );
++
++			PrepareResp Deny( string reason )
++			{
++				_log( $"[transfer] PREPARE {r.TransferId} {r.SteamId} {r.SrcShard}->{r.DstShard} DENIED: {reason}" );
++				return new PrepareResp( false, reason, r.TransferId, "", default );
++			}
++		}
++	}
++
++	/// <summary>
++	/// Destination shard confirms an arriving player. Resolves the transfer via the player's
++	/// InTransit record (dst never sees the TransferId). Idempotent: a second accept after
++	/// consume returns the same authoritative snapshot without re-applying anything.
++	/// </summary>
++	public AcceptResp Accept( AcceptReq r )
++	{
++		lock ( _lock )
++		{
++			var p = GetOrCreate( r.SteamId );
++			var transferId = p.InTransit;
++
++			if ( transferId is null || !_tokens.TryGetValue( transferId, out var token ) )
++			{
++				// Not mid-transfer here. If already sitting on dst, that's an idempotent
++				// success (accept was already processed and InTransit cleared). Otherwise
++				// this arrival is a normal join, so tell the caller and it falls back.
++				if ( p.CurrentShard == r.DstShard )
++					return new AcceptResp( true, "already-accepted", ToDto( p ) );
++
++				_log( $"[transfer] ACCEPT {r.SteamId}->{r.DstShard} not-in-transit (fall back to join)" );
++				return new AcceptResp( false, "not-in-transit", null );
++			}
++
++			if ( token.DstShard != r.DstShard )
++			{
++				// Player surfaced on a shard that isn't the transfer's destination, e.g. the
++				// client failed to reach dst and reconnected to src. Abandon the transfer and
++				// let the caller fall back to a normal join. Money stays intact (authoritative
++				// here), so nothing is lost.
++				token.Expired = true;
++				if ( p.InTransit == transferId )
++					p.InTransit = null;
++				Save();
++				_log( $"[transfer] ACCEPT {transferId} {r.SteamId} arrived {r.DstShard} != dst " +
++					$"{token.DstShard}, abandoned, caller should join" );
++				return new AcceptResp( false, "not-in-transit", null );
++			}
++
++			if ( token.Consumed )
++			{
++				_log( $"[transfer] ACCEPT {transferId} {r.SteamId} REPLAY, no-op" );
++				return new AcceptResp( true, "replay", ToDto( p ) );
++			}
++
++			if ( token.Expired || Now() > token.ExpiresAt )
++			{
++				token.Expired = true;
++				if ( p.InTransit == transferId )
++					p.InTransit = null;   // revert
++				Save();
++				return Fail( "token expired" );
++			}
++
++			// Consume: the one and only mutation point.
++			token.Consumed = true;
++			p.CurrentShard = token.DstShard;
++			p.InTransit = null;
++			p.Money = token.Money;
++			p.CarriedItem = token.CarriedItem;
++			p.Handcuffed = token.Handcuffed;
++			p.Position = token.Position;
++			Save();
++
++			_log( $"[transfer] ACCEPT {transferId} {r.SteamId} -> {r.DstShard} OK " +
++				$"(money={p.Money},item={p.CarriedItem},cuffs={p.Handcuffed})" );
++			return new AcceptResp( true, "", ToDto( p ) );
++
++			AcceptResp Fail( string reason )
++			{
++				_log( $"[transfer] ACCEPT {transferId} {r.SteamId}->{r.DstShard} FAIL: {reason}" );
++				return new AcceptResp( false, reason, null );
++			}
++		}
++	}
++
++	public OkResp Cancel( CancelReq r )
++	{
++		lock ( _lock )
++		{
++			var p = GetOrCreate( r.SteamId );
++			if ( p.InTransit == r.TransferId )
++			{
++				p.InTransit = null;
++				if ( _tokens.TryGetValue( r.TransferId, out var t ) )
++					t.Expired = true;
++				Save();
++				_log( $"[transfer] CANCEL {r.TransferId} {r.SteamId}, reverted" );
++				return new OkResp( true );
++			}
++			return new OkResp( false, "not in transit under that id" );
++		}
++	}
++
++	/// <summary>Test hook: mark the player's in-flight token expired.</summary>
++	public bool ForceExpireInTransit( string steamId )
++	{
++		lock ( _lock )
++		{
++			if ( _players.TryGetValue( steamId, out var p ) && p.InTransit is not null
++				&& _tokens.TryGetValue( p.InTransit, out var t ) )
++			{
++				t.ExpiresAt = Now().AddSeconds( -1 );
++				_log( $"[debug] force-expired token {t.TransferId} for {steamId}" );
++				return true;
++			}
++			return false;
++		}
++	}
++
++	/// <summary>Timer-driven: expire stale tokens and auto-revert their InTransit locks.</summary>
++	public void SweepExpired()
++	{
++		lock ( _lock )
++		{
++			var now = Now();
++			foreach ( var t in _tokens.Values )
++			{
++				if ( t.Consumed || t.Expired ) continue;
++				if ( now <= t.ExpiresAt ) continue;
++
++				t.Expired = true;
++				if ( _players.TryGetValue( t.SteamId, out var p ) && p.InTransit == t.TransferId )
++				{
++					p.InTransit = null;
++					_log( $"[sweep] token {t.TransferId} expired, reverted InTransit for {t.SteamId}" );
++				}
++			}
++		}
++	}
++
++	private string SignToken( TransferToken t )
++	{
++		var payload = $"{t.TransferId}|{t.SteamId}|{t.SrcShard}|{t.DstShard}|{t.Money}|" +
++			$"{t.CarriedItem}|{t.Handcuffed}|{t.IssuedAt:o}|{t.ExpiresAt:o}|{t.Nonce}";
++		return Crypto.HmacHex( Secret, payload );
++	}
++
++	// Persistence.
++	private sealed record Snapshot( List<PlayerRecord> Players, List<TransferToken> Tokens );
++
++	private void Save()
++	{
++		try
++		{
++			var snap = new Snapshot( _players.Values.ToList(), _tokens.Values.ToList() );
++			var dir = Path.GetDirectoryName( _dataFile );
++			if ( !string.IsNullOrEmpty( dir ) )
++				Directory.CreateDirectory( dir );
++			var tmp = _dataFile + ".tmp";
++			File.WriteAllText( tmp, JsonSerializer.Serialize( snap, JsonOpts ) );
++			File.Move( tmp, _dataFile, overwrite: true );   // atomic-ish
++		}
++		catch ( Exception e )
++		{
++			_log( $"[persist] save failed: {e.Message}" );
++		}
++	}
++
++	public static Store LoadOrCreate( string dataFile, Action<string> log )
++	{
++		var store = new Store( dataFile, log );
++		try
++		{
++			if ( File.Exists( dataFile ) )
++			{
++				var snap = JsonSerializer.Deserialize<Snapshot>( File.ReadAllText( dataFile ), JsonOpts );
++				if ( snap is not null )
++				{
++					foreach ( var p in snap.Players )
++						store._players[p.SteamId] = p;
++					foreach ( var t in snap.Tokens )
++						store._tokens[t.TransferId] = t;
++					log( $"[persist] loaded {store._players.Count} players, {store._tokens.Count} tokens" );
++				}
++			}
++		}
++		catch ( Exception e )
++		{
++			log( $"[persist] load failed ({e.Message}), starting empty" );
++		}
++		return store;
++	}
++
++	private static readonly JsonSerializerOptions JsonOpts = new()
++	{
++		WriteIndented = true,
++		PropertyNameCaseInsensitive = true,
++	};
++}
+diff --git a/backend/SubZeroShardBackend.csproj b/backend/SubZeroShardBackend.csproj
+new file mode 100644
+index 0000000..6d7b869
+--- /dev/null
++++ b/backend/SubZeroShardBackend.csproj
+@@ -0,0 +1,12 @@
++<Project Sdk="Microsoft.NET.Sdk.Web">
++
++  <PropertyGroup>
++    <TargetFramework>net10.0</TargetFramework>
++    <Nullable>enable</Nullable>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <RootNamespace>SubZeroShardBackend</RootNamespace>
++    <!-- This project is intentionally OUTSIDE the s&box `Code/` folder so the s&box
++         editor does not try to compile it. It is a standalone ASP.NET service. -->
++  </PropertyGroup>
++
++</Project>
+diff --git a/backend/smoke-test.ps1 b/backend/smoke-test.ps1
+new file mode 100644
+index 0000000..1e7f01e
+--- /dev/null
++++ b/backend/smoke-test.ps1
+@@ -0,0 +1,137 @@
++<#
++  Backend smoke test: exercises the transfer state machine over HTTP with real HMAC
++  envelopes. Proves the backend side of the transfer matrix (happy path, exact-once toll,
++  replay no-op, destination full, destination down, token expiry+revert, bad signature)
++  without s&box. Starts the backend (if not already up), runs assertions, stops it.
++
++  Run:  powershell -ExecutionPolicy Bypass -File backend\smoke-test.ps1
++#>
++
++$ErrorActionPreference = 'Stop'
++$base   = 'http://localhost:8443'
++$secret = 'fb1976e069994f08a3f0725eb5ba9051ecd5159ab74cce1f2cdf6cad56bfa45d'
++$here   = Split-Path -Parent $MyInvocation.MyCommand.Path
++$dll    = Join-Path $here 'bin\Debug\net10.0\SubZeroShardBackend.dll'
++
++$script:fails = 0
++function Check($name, $cond) {
++  if ($cond) { Write-Host "  PASS  $name" -ForegroundColor Green }
++  else       { Write-Host "  FAIL  $name" -ForegroundColor Red; $script:fails++ }
++}
++
++function Sign($payload) {
++  $h = [System.Security.Cryptography.HMACSHA256]::new([Text.Encoding]::UTF8.GetBytes($secret))
++  ($h.ComputeHash([Text.Encoding]::UTF8.GetBytes($payload)) | ForEach-Object { $_.ToString('x2') }) -join ''
++}
++function Call($path, $obj, [string]$badSig) {
++  $payload = ($obj | ConvertTo-Json -Compress)
++  $sig = if ($badSig) { $badSig } else { Sign $payload }
++  $env = @{ payload = $payload; sig = $sig } | ConvertTo-Json -Compress
++  try {
++    Invoke-RestMethod -Uri "$base$path" -Method Post -Body $env -ContentType 'application/json'
++  } catch {
++    # surface HTTP status for negative tests
++    [pscustomobject]@{ __status = $_.Exception.Response.StatusCode.value__ }
++  }
++}
++
++# --- start backend if needed ---
++$started = $false
++try { Invoke-RestMethod "$base/health" -TimeoutSec 2 | Out-Null; Write-Host "Using already-running backend." }
++catch {
++  if (-not (Test-Path $dll)) { throw "backend not built. Run: dotnet build backend\SubZeroShardBackend.csproj" }
++  Write-Host "Starting backend..."
++  # fresh state for a clean run
++  $dataFile = Join-Path $here 'data\state.json'
++  if (Test-Path $dataFile) { Remove-Item $dataFile -Force }
++  $proc = Start-Process dotnet -ArgumentList "`"$dll`"" -WorkingDirectory $here -PassThru -WindowStyle Hidden
++  $started = $true
++  $ok = $false
++  foreach ($i in 1..30) {
++    Start-Sleep -Milliseconds 400
++    try { Invoke-RestMethod "$base/health" -TimeoutSec 2 | Out-Null; $ok = $true; break } catch {}
++  }
++  if (-not $ok) { throw "backend did not come up" }
++}
++
++Write-Host "`n=== Backend smoke test ===" -ForegroundColor Cyan
++$P = '76561190000000001'   # fake steamId64
++
++# heartbeats: A and B up with capacity 2
++Call '/directory/heartbeat' @{ ShardId='A'; ConnectHandle='lobbyA'; Players=1; Capacity=2; Version='1' } | Out-Null
++Call '/directory/heartbeat' @{ ShardId='B'; ConnectHandle='lobbyB'; Players=0; Capacity=2; Version='1' } | Out-Null
++
++# join A
++$j = Call '/player/join' @{ SteamId=$P; ShardId='A' }
++Check "join A -> currentShard=A"      ($j.currentShard -eq 'A')
++Check "new player money=500"          ($j.money -eq 500)
++Check "new player carries briefcase"  ($j.carriedItem -eq 'briefcase')
++
++# lookup
++$lk = Call '/directory/lookup' @{ ShardId='B' }
++Check "lookup B up + handle"          ($lk.up -eq $true -and $lk.connectHandle -eq 'lobbyB')
++
++# --- happy path A->B (row 1) ---
++$T1 = 'A:t1'
++$pr = Call '/transfer/prepare' @{ SteamId=$P; SrcShard='A'; DstShard='B'; TransferId=$T1 }
++Check "prepare A->B ok"               ($pr.ok -eq $true -and $pr.dstConnectHandle -eq 'lobbyB')
++$ac = Call '/transfer/accept' @{ SteamId=$P; DstShard='B' }
++Check "accept on B ok"                ($ac.ok -eq $true)
++Check "arrived money=500 (row1/2)"    ($ac.snapshot.money -eq 500)
++Check "arrived item carried"          ($ac.snapshot.carriedItem -eq 'briefcase')
++Check "arrived currentShard=B"        ($ac.snapshot.currentShard -eq 'B')
++
++# --- replay accept is a no-op (row 12) ---
++$rp = Call '/transfer/accept' @{ SteamId=$P; DstShard='B' }
++Check "replay accept no-op, money=500 (row12)" ($rp.ok -eq $true -and $rp.snapshot.money -eq 500)
++
++# --- toll: exact-once deduction (rows 2/3) ---
++$T2 = 'B:t2'
++$l1 = Call '/player/apply-ledger' @{ SteamId=$P; TransferId=$T2; Delta=-100; Reason='toll' }
++Check "toll deduct -> 400"            ($l1.ok -eq $true -and $l1.balance -eq 400)
++$l2 = Call '/player/apply-ledger' @{ SteamId=$P; TransferId=$T2; Delta=-100; Reason='toll' }
++Check "toll re-apply deduped -> 400"  ($l2.balance -eq 400)
++$pr2 = Call '/transfer/prepare' @{ SteamId=$P; SrcShard='B'; DstShard='A'; TransferId=$T2 }
++$ac2 = Call '/transfer/accept' @{ SteamId=$P; DstShard='A' }
++Check "after toll+transfer money=400" ($ac2.snapshot.money -eq 400)
++
++# --- toll blocked: insufficient funds (row 4) ---
++$blk = Call '/player/apply-ledger' @{ SteamId=$P; TransferId='B:big'; Delta=-100000; Reason='toll' }
++Check "insufficient toll denied, money intact" ($blk.ok -eq $false -and $blk.balance -eq 400)
++
++# --- destination full (row 9) ---
++Call '/directory/heartbeat' @{ ShardId='B'; ConnectHandle='lobbyB'; Players=2; Capacity=2; Version='1' } | Out-Null
++$full = Call '/transfer/prepare' @{ SteamId=$P; SrcShard='A'; DstShard='B'; TransferId='A:full' }
++Check "prepare to full B denied (row9)" ($full.ok -eq $false -and $full.reason -match 'full')
++
++# --- destination down (row 10): C never heartbeats ---
++$down = Call '/transfer/prepare' @{ SteamId=$P; SrcShard='A'; DstShard='C'; TransferId='A:down' }
++Check "prepare to down C denied (row10)" ($down.ok -eq $false -and $down.reason -match 'down')
++
++# --- token expiry + revert (row 11) ---
++Call '/directory/heartbeat' @{ ShardId='B'; ConnectHandle='lobbyB'; Players=0; Capacity=2; Version='1' } | Out-Null
++$T4 = 'A:t4'
++Call '/transfer/prepare' @{ SteamId=$P; SrcShard='A'; DstShard='B'; TransferId=$T4 } | Out-Null
++Call '/debug/force-expire' @{ SteamId=$P } | Out-Null
++$exp = Call '/transfer/accept' @{ SteamId=$P; DstShard='B' }
++Check "expired accept rejected (row11)"  ($exp.ok -eq $false -and $exp.reason -match 'expired')
++$after = Call '/player/get' @{ SteamId=$P }
++Check "after expiry stays on A"          ($after.currentShard -eq 'A')
++Check "after expiry InTransit cleared"   ([string]::IsNullOrEmpty($after.inTransit))
++Check "after expiry money intact=400"    ($after.money -eq 400)
++
++# --- cancel reverts InTransit ---
++Call '/transfer/prepare' @{ SteamId=$P; SrcShard='A'; DstShard='B'; TransferId='A:t5' } | Out-Null
++$cn = Call '/transfer/cancel' @{ SteamId=$P; TransferId='A:t5' }
++Check "cancel ok"                        ($cn.ok -eq $true)
++$ag = Call '/player/get' @{ SteamId=$P }
++Check "cancel cleared InTransit"         ([string]::IsNullOrEmpty($ag.inTransit))
++
++# --- bad signature rejected (401) ---
++$bad = Call '/player/get' @{ SteamId=$P } 'deadbeef'
++Check "bad signature -> 401"             ($bad.__status -eq 401)
++
++Write-Host "`n=== $(if ($script:fails -eq 0) {'ALL PASS'} else {"$script:fails FAILED"}) ===" -ForegroundColor $(if ($script:fails -eq 0){'Green'}else{'Red'})
++
++if ($started) { Stop-Process -Id $proc.Id -Force; Write-Host "Backend stopped." }
++exit $script:fails
+diff --git a/scripts/run-all.ps1 b/scripts/run-all.ps1
+new file mode 100644
+index 0000000..0be4171
+--- /dev/null
++++ b/scripts/run-all.ps1
+@@ -0,0 +1,36 @@
++<#
++  Start the whole demo: backend + 3 dedicated shards (A/B/C), each in its own window.
++  Run:  powershell -ExecutionPolicy Bypass -File scripts\run-all.ps1
++  Stop: scripts\stop-all.ps1  (or just close the windows)
++#>
++
++$scripts = $PSScriptRoot
++
++Write-Host "About to launch:" -ForegroundColor Yellow
++Write-Host "  - backend        http://localhost:8443"
++Write-Host "  - shard A        Downtown    (port 27015)"
++Write-Host "  - shard B        Industrial  (port 27017)"
++Write-Host "  - shard C        Jail        (port 27019)"
++Write-Host "That's 4 separate windows (1 backend + 3 dedicated servers)." -ForegroundColor Yellow
++$confirm = Read-Host "Start everything? (y/N)"
++if ($confirm -notmatch '^(y|yes)$') {
++  Write-Host "Cancelled - nothing started." -ForegroundColor Red
++  exit 0
++}
++Write-Host ""
++
++Write-Host "Starting backend (http://localhost:8443)..." -ForegroundColor Cyan
++Start-Process cmd -ArgumentList '/k', "`"$scripts\run-backend.bat`""
++Start-Sleep -Seconds 3
++
++foreach ($s in 'A','B','C') {
++  Write-Host "Starting shard $s..." -ForegroundColor Cyan
++  Start-Process cmd -ArgumentList '/k', "`"$scripts\run-shard.bat`" $s"
++  Start-Sleep -Seconds 2
++}
++
++Write-Host ""
++Write-Host "Launched backend + shards A/B/C in separate windows." -ForegroundColor Green
++Write-Host "Connect a client from the game console:  status  (on a shard) to read its lobby id,"
++Write-Host "then  connect <lobbyId>  (or  connect local  with +net_allow_local)."
++Write-Host "Stop everything with scripts\stop-all.ps1"
+diff --git a/scripts/setup-steamclient.ps1 b/scripts/setup-steamclient.ps1
+new file mode 100644
+index 0000000..b2b8eeb
+--- /dev/null
++++ b/scripts/setup-steamclient.ps1
+@@ -0,0 +1,21 @@
++<#
++  Optional. The s&box dedicated server no longer ships Steam client binaries; it needs them
++  linked before it can initialise Steamworks (create a lobby). If you have the Steam desktop
++  client installed, this is already satisfied and you do not need this script.
++
++  Otherwise, point the registry at your SteamCMD client DLLs (per the official doc):
++  Run:  powershell -ExecutionPolicy Bypass -File scripts\setup-steamclient.ps1 -SteamCmdDir C:\steamcmd
++#>
++param([string]$SteamCmdDir = "C:\steamcmd")
++
++$dll64 = Join-Path $SteamCmdDir "steamclient64.dll"
++$dll   = Join-Path $SteamCmdDir "steamclient.dll"
++
++if (-not (Test-Path $dll64)) { Write-Warning "steamclient64.dll not found at $dll64, check -SteamCmdDir." }
++
++New-Item -Path "HKCU:\SOFTWARE\Valve\Steam\ActiveProcess" -Force | Out-Null
++Set-ItemProperty -Path "HKCU:\SOFTWARE\Valve\Steam\ActiveProcess" -Name "SteamClientDll64" -Value $dll64 -Type String
++Set-ItemProperty -Path "HKCU:\SOFTWARE\Valve\Steam\ActiveProcess" -Name "SteamClientDll"   -Value $dll   -Type String
++
++Write-Host "Set SteamClient DLL registry entries to '$SteamCmdDir'." -ForegroundColor Green
++Write-Host "(Only needed if you don't have the Steam desktop client.)"
+diff --git a/scripts/stop-all.ps1 b/scripts/stop-all.ps1
+new file mode 100644
+index 0000000..0e1caea
+--- /dev/null
++++ b/scripts/stop-all.ps1
+@@ -0,0 +1,18 @@
++<#
++  Stop all shards + the backend started by run-all.ps1.
++  Run:  powershell -ExecutionPolicy Bypass -File scripts\stop-all.ps1
++#>
++
++$n = 0
++
++Get-Process sbox-server -ErrorAction SilentlyContinue | ForEach-Object {
++  try { $_ | Stop-Process -Force; $n++ } catch {}
++}
++
++Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" -ErrorAction SilentlyContinue |
++  Where-Object { $_.CommandLine -match 'SubZeroShardBackend' } |
++  ForEach-Object {
++    try { Stop-Process -Id $_.ProcessId -Force; $n++ } catch {}
++  }
++
++Write-Host "Stopped $n process(es) (shards + backend)." -ForegroundColor Green
+diff --git a/subzerosharddemo.sbproj b/subzerosharddemo.sbproj
+new file mode 100644
+index 0000000..d8d8aff
+--- /dev/null
++++ b/subzerosharddemo.sbproj
+@@ -0,0 +1,35 @@
++{
++  "Title": "SubZeroShardDemo",
++  "Type": "game",
++  "Org": "subzerostudios",
++  "Ident": "subzerosharddemo",
++  "Schema": 1,
++  "IncludeSourceFiles": false,
++  "Resources": "*.png\n*.ttf\n*.mp3\n*.wav\n*.config\n*.scss\n*.prefab\n*.prefab_c\n*.json\nfonts/*\n/fonts/*\n/ui/*\nstyle/*",
++  "PackageReferences": [],
++  "EditorReferences": null,
++  "Mounts": [],
++  "IsStandaloneOnly": false,
++  "Metadata": {
++    "MaxPlayers": 8,
++    "MinPlayers": 1,
++    "TickRate": 50,
++    "GameNetworkType": "Multiplayer",
++    "MapSelect": "Local",
++    "MapList": [],
++    "RankType": "None",
++    "PerMapRanking": false,
++    "LeaderboardType": "None",
++    "CsProjName": "",
++    "StartupScene": "scenes/subzerosharddemo.scene",
++    "ProjectTemplate": null,
++    "LaunchMode": "Launcher",
++    "MapStartupScene": "scenes/subzerosharddemo.scene",
++    "DedicatedServerStartupScene": "scenes/subzerosharddemo.scene",
++    "ControlModes": {
++      "Keyboard": true,
++      "VR": false,
++      "Gamepad": true
++    }
++  }
++}
+\ No newline at end of file
+commit fe7ef8db2d32ce9f15fa9b4e656fbe1d7ddaff60
+Author: JordanR <81587380+JordanR123@users.noreply.github.com>
+AuthorDate: 2026-07-17T11:22:36-07:00
+Committer: JordanR <81587380+JordanR123@users.noreply.github.com>
+CommitDate: 2026-07-17T11:22:36-07:00
+
+    Add Development/ folder, sweep stray root docs into it
+
+---
+ {scripts => Development/Scripts}/run-all.ps1           | 0
+ {scripts => Development/Scripts}/setup-steamclient.ps1 | 0
+ {scripts => Development/Scripts}/stop-all.ps1          | 0
+ 3 files changed, 0 insertions(+), 0 deletions(-)
+
+diff --git a/scripts/run-all.ps1 b/Development/Scripts/run-all.ps1
+similarity index 100%
+rename from scripts/run-all.ps1
+rename to Development/Scripts/run-all.ps1
+diff --git a/scripts/setup-steamclient.ps1 b/Development/Scripts/setup-steamclient.ps1
+similarity index 100%
+rename from scripts/setup-steamclient.ps1
+rename to Development/Scripts/setup-steamclient.ps1
+diff --git a/scripts/stop-all.ps1 b/Development/Scripts/stop-all.ps1
+similarity index 100%
+rename from scripts/stop-all.ps1
+rename to Development/Scripts/stop-all.ps1

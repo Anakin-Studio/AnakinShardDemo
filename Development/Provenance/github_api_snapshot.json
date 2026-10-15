@@ -1,0 +1,92 @@
+{
+ "repo": "officialsubzerostudios/SubZeroShardDemo",
+ "captured_utc": "2026-10-15T22:43:37.968029Z",
+ "contributors": [
+  {
+   "login": "JordanR123",
+   "id": 81587380,
+   "node_id": "MDQ6VXNlcjgxNTg3Mzgw",
+   "avatar_url": "https://avatars.githubusercontent.com/u/81587380?v=4",
+   "gravatar_id": "",
+   "url": "https://api.github.com/users/JordanR123",
+   "html_url": "https://github.com/JordanR123",
+   "followers_url": "https://api.github.com/users/JordanR123/followers",
+   "following_url": "https://api.github.com/users/JordanR123/following{/other_user}",
+   "gists_url": "https://api.github.com/users/JordanR123/gists{/gist_id}",
+   "starred_url": "https://api.github.com/users/JordanR123/starred{/owner}{/repo}",
+   "subscriptions_url": "https://api.github.com/users/JordanR123/subscriptions",
+   "organizations_url": "https://api.github.com/users/JordanR123/orgs",
+   "repos_url": "https://api.github.com/users/JordanR123/repos",
+   "events_url": "https://api.github.com/users/JordanR123/events{/privacy}",
+   "received_events_url": "https://api.github.com/users/JordanR123/received_events",
+   "type": "User",
+   "user_view_type": "public",
+   "site_admin": false,
+   "contributions": 4
+  },
+  {
+   "login": "Jinjav66",
+   "id": 87618442,
+   "node_id": "MDQ6VXNlcjg3NjE4NDQy",
+   "avatar_url": "https://avatars.githubusercontent.com/u/87618442?v=4",
+   "gravatar_id": "",
+   "url": "https://api.github.com/users/Jinjav66",
+   "html_url": "https://github.com/Jinjav66",
+   "followers_url": "https://api.github.com/users/Jinjav66/followers",
+   "following_url": "https://api.github.com/users/Jinjav66/following{/other_user}",
+   "gists_url": "https://api.github.com/users/Jinjav66/gists{/gist_id}",
+   "starred_url": "https://api.github.com/users/Jinjav66/starred{/owner}{/repo}",
+   "subscriptions_url": "https://api.github.com/users/Jinjav66/subscriptions",
+   "organizations_url": "https://api.github.com/users/Jinjav66/orgs",
+   "repos_url": "https://api.github.com/users/Jinjav66/repos",
+   "events_url": "https://api.github.com/users/Jinjav66/events{/privacy}",
+   "received_events_url": "https://api.github.com/users/Jinjav66/received_events",
+   "type": "User",
+   "user_view_type": "public",
+   "site_admin": false,
+   "contributions": 1
+  }
+ ],
+ "branches": [
+  {
+   "name": "main",
+   "commit": {
+    "sha": "2cec1de92c58e95873bfd0f3703b563d27ff492c",
+    "url": "https://api.github.com/repos/officialsubzerostudios/SubZeroShardDemo/commits/2cec1de92c58e95873bfd0f3703b563d27ff492c"
+   },
+   "protected": false
+  }
+ ],
+ "commits": {
+  "2cec1de92c58e95873bfd0f3703b563d27ff492c": {
+   "author_login": "Jinjav66",
+   "committer_login": "Jinjav66",
+   "verified": false,
+   "verify_reason": "unsigned"
+  },
+  "4c87a6635c4d11f3358998eb7c5b785e892e68d0": {
+   "author_login": "JordanR123",
+   "committer_login": "web-flow",
+   "verified": true,
+   "verify_reason": "valid"
+  },
+  "520092e3c20f184271dfecc76f6aeb8d2df61d92": {
+   "author_login": "JordanR123",
+   "committer_login": "JordanR123",
+   "verified": false,
+   "verify_reason": "unsigned"
+  },
+  "fe7ef8db2d32ce9f15fa9b4e656fbe1d7ddaff60": {
+   "author_login": "JordanR123",
+   "committer_login": "JordanR123",
+   "verified": false,
+   "verify_reason": "unsigned"
+  },
+  "76f1d85c36c05772b3d13b2726e0d5b8b0df2b4c": {
+   "author_login": "JordanR123",
+   "committer_login": "JordanR123",
+   "verified": false,
+   "verify_reason": "unsigned"
+  }
+ }
+}
