@@ -1,4 +1,4 @@
-# SubZeroShardDemo Changelog
+# AnakinShardDemo Changelog
 
 Public-facing development changelog. Plain, professional entries that testers can understand.
 Newest first. See `Agent/VersionControl.md` for the rules.

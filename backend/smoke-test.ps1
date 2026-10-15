@@ -11,7 +11,7 @@ $ErrorActionPreference = 'Stop'
 $base   = 'http://localhost:8443'
 $secret = 'fb1976e069994f08a3f0725eb5ba9051ecd5159ab74cce1f2cdf6cad56bfa45d'
 $here   = Split-Path -Parent $MyInvocation.MyCommand.Path
-$dll    = Join-Path $here 'bin\Debug\net10.0\SubZeroShardBackend.dll'
+$dll    = Join-Path $here 'bin\Debug\net10.0\AnakinShardBackend.dll'
 
 $script:fails = 0
 function Check($name, $cond) {
@@ -39,7 +39,7 @@ function Call($path, $obj, [string]$badSig) {
 $started = $false
 try { Invoke-RestMethod "$base/health" -TimeoutSec 2 | Out-Null; Write-Host "Using already-running backend." }
 catch {
-  if (-not (Test-Path $dll)) { throw "backend not built. Run: dotnet build backend\SubZeroShardBackend.csproj" }
+  if (-not (Test-Path $dll)) { throw "backend not built. Run: dotnet build backend\AnakinShardBackend.csproj" }
   Write-Host "Starting backend..."
   # fresh state for a clean run
   $dataFile = Join-Path $here 'data\state.json'

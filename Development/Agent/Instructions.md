@@ -1,6 +1,6 @@
 # Agent Instructions
 
-Working notes for AI agents and developers touching SubZeroShardDemo.
+Working notes for AI agents and developers touching AnakinShardDemo.
 
 ## s&box compile errors: logs ONLY (mandatory)
 
@@ -9,7 +9,7 @@ Never use `dotnet build` to verify s&box game code. The only source of truth for
 `E:\SteamLibrary\steamapps\common\sbox\logs`
 
 Read `sbox-dev.log` (and dated variants if needed). Search for
-`Compile of 'subzerostudios.subzerosharddemo' Failed` and `Error |`. Fix every error and re-read the log before
+`Compile of 'anakin.anakinsharddemo' Failed` and `Error |`. Fix every error and re-read the log before
 reporting the change as done.
 
 ## Editor MCP (mandatory for editor-side changes)

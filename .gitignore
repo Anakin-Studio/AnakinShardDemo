@@ -7,7 +7,7 @@
 *.csproj.user
 Code/*.csproj
 Code/Properties/
-subzerosharddemo.csproj
+anakinsharddemo.csproj
 CodeGenOutput/
 Local.sbproj
 

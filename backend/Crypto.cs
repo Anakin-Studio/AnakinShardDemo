@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace SubZeroShardBackend;
+namespace AnakinShardBackend;
 
 /// <summary>
 /// HMAC-SHA256 request authentication. Every request body is a signed envelope

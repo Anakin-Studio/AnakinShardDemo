@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace SubZeroShardBackend;
+namespace AnakinShardBackend;
 
 /// <summary>
 /// In-memory authoritative store with JSON-file durability. All public methods lock a single

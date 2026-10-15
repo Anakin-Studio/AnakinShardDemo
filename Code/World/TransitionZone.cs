@@ -1,6 +1,6 @@
 using Sandbox;
 
-namespace SubZeroShardDemo;
+namespace AnakinShardDemo;
 
 public enum TransferRule
 {

@@ -14,7 +14,7 @@ Shared comment and code style reference:
 
 ## Project Ownership
 
-- SubZeroShardDemo-owned code should live under `SubZeroShardDemo.*` namespaces.
+- AnakinShardDemo-owned code should live under `AnakinShardDemo.*` namespaces.
 - Prefer local extension points, wrappers, or project-specific components over hidden changes to
   copied base files.
 - Do not solve gameplay, scene, or UI ownership problems with unrelated hacks.

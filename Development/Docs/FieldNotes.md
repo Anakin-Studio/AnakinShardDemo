@@ -1,4 +1,4 @@
-# SubZeroShardDemo Field Notes
+# AnakinShardDemo Field Notes
 
 What actually held up in this project: engine API corrections, confirmed gotchas, and traps
 discovered while building. Modeled on the ZeroLoop field notes
@@ -23,7 +23,7 @@ Last reviewed against the code: 2026-10-09. "Confirmed" means observed on a real
 | `System.Security.Cryptography.HMACSHA256` in game code | Blocked (SB1000) | Sandbox whitelist rejects it. See gotcha 2. |
 | `Convert.ToHexString` | Allowed | Used by `Code/Shared/Hmac.cs`. |
 | `Http.RequestAsync` to `http://localhost:8443` from a headless server | Confirmed | Heartbeats reached the backend (`SPIKE.md`). 8443 is on the localhost allowlist. |
-| `[ConVar( "subzero_shard" )]` filled from `+subzero_shard A` before `OnStart` | Unverified | See gotcha 3. |
+| `[ConVar( "anakin_shard" )]` filled from `+anakin_shard A` before `OnStart` | Unverified | See gotcha 3. |
 | `FileSystem.Mounted` can read `config/shard.<id>.json` | Unverified, assume no | See gotcha 5. |
 | `Connection.Kick( reason )` | Unverified | Duplicate-login path in `TransferService.ValidateOwnership`. |
 | `Application.IsDedicatedServer` | Used as the shard switch | Editor and clients return false, so they never build a backend client. |
@@ -49,9 +49,9 @@ live run has confirmed. Items 6, 7 and 9 are repo facts verified by reading the 
    casing differences do not break auth. If you touch `Hmac.cs`, re-verify a signature against
    the backend before trusting it.
 
-3. Convar timing is unverified. `ShardContext.ShardArg` (`[ConVar( "subzero_shard" )]`) is read in
+3. Convar timing is unverified. `ShardContext.ShardArg` (`[ConVar( "anakin_shard" )]`) is read in
    `OnStart` (`Code/Shard/ShardContext.cs`), on the assumption that launch params are applied as
-   convars before the scene starts. The code falls back to parsing the hostname ("SubZero Shard
+   convars before the scene starts. The code falls back to parsing the hostname ("Anakin Shard
    B - Industrial") and then to `A`. A silent fallback to `A` on a mis-timed convar would put a
    shard in the wrong identity, so check each shard's `[shard] DEDICATED shard X` log line on boot.
    `Normalize` also maps any id other than `A`, `B`, `C` to `A`.

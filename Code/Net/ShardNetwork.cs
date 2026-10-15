@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Sandbox;
 using Sandbox.Network;
 
-namespace SubZeroShardDemo;
+namespace AnakinShardDemo;
 
 /// <summary>
 /// Core host-side networking for a shard: creates the Steam lobby (required, or clients get
@@ -47,7 +47,7 @@ public sealed class ShardNetwork : Component, Component.INetworkListener
 			Networking.CreateLobby( new LobbyConfig
 			{
 				MaxPlayers = Math.Max( cap, 1 ),
-				Name = ShardContext.Current?.DisplayName ?? "SubZero Shard",
+				Name = ShardContext.Current?.DisplayName ?? "Anakin Shard",
 			} );
 			// Tag the lobby with the shard id so clients and peers can find it via QueryLobbies.
 			Networking.SetData( "shardid", ShardContext.Current?.ShardId ?? "A" );

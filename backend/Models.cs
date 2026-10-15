@@ -1,4 +1,4 @@
-namespace SubZeroShardBackend;
+namespace AnakinShardBackend;
 
 // Wire envelope (all requests). payload is the JSON of the real request DTO,
 // sig is HMAC-SHA256(secret, payload).

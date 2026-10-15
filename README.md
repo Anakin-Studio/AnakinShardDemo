@@ -1,6 +1,6 @@
 <div align="center">
 
-# SubZeroShardDemo
+# AnakinShardDemo
 
 ### Cross-shard player transfer for s&box (backend proven, in-game run proven)
 
@@ -156,7 +156,7 @@ and rule arrive from the client on the button path. See "Code risks found 2026-1
 > The launch scripts now live in `Development\Scripts\` (they moved from `scripts\`). Known
 > issue: `run-shard.bat` and `run-backend.bat` still build their project/backend paths with a
 > single `..` (they were written for a root-level `scripts\` folder), so from
-> `Development\Scripts\` they resolve to `Development\` and fail to find `subzerosharddemo.sbproj`
+> `Development\Scripts\` they resolve to `Development\` and fail to find `anakinsharddemo.sbproj`
 > and `backend\`. Change `..` to `..\..` in those two scripts (tracked in the local TODO).
 
 ### 1. Start the backend
@@ -216,24 +216,24 @@ How a client finds a shard:
 
 Run from the client console; they execute host-side on your player. WARNING: they are
 `[ConCmd( ..., ConVarFlags.Server )]` with no permission check (`Code/Debug/DebugCommands.cs`), so
-any connected client can run them, including `subzero_setmoney`. Acceptable for a local demo; a
+any connected client can run them, including `anakin_setmoney`. Acceptable for a local demo; a
 real game must restrict them to the host or staff, or compile them out of release builds.
 
 | Command | Effect |
 |---|---|
-| `subzero_setmoney 500` | set your money (via the backend ledger) |
-| `subzero_cuffs 1` | handcuff (`1`) / uncuff (`0`) yourself |
-| `subzero_item briefcase` | set your carried item (`""` for none) |
-| `subzero_combat` | mark just-took-damage (starts the 5s combat lock) |
-| `subzero_transfer B` | force a transfer to shard `B` / `C` / `A` |
-| `subzero_info` | print shard and player state to the console |
+| `anakin_setmoney 500` | set your money (via the backend ledger) |
+| `anakin_cuffs 1` | handcuff (`1`) / uncuff (`0`) yourself |
+| `anakin_item briefcase` | set your carried item (`""` for none) |
+| `anakin_combat` | mark just-took-damage (starts the 5s combat lock) |
+| `anakin_transfer B` | force a transfer to shard `B` / `C` / `A` |
+| `anakin_info` | print shard and player state to the console |
 
 ---
 
 ## Project layout
 
 ```
-SubZeroShardDemo/
+AnakinShardDemo/
 ├─ Code/                     # s&box game C# (compiles in the editor)
 │  ├─ Shard/                 # ShardContext, ShardConfig  (per-shard identity + config)
 │  ├─ Net/                   # BackendClient, ServerDirectory, ShardNetwork
@@ -248,7 +248,7 @@ SubZeroShardDemo/
 ├─ config/                   # shard.A/B/C.json  (not reliably read at runtime, see Configuration)
 ├─ Development/Scripts/      # run-backend.bat, run-shard.bat, run-all.bat/.ps1, stop-all.bat/.ps1
 ├─ Development/Docs/         # architecture, multiplayer, field notes (TODO/TEST_RESULTS/SPIKE are local-only)
-└─ Assets/scenes/            # subzerosharddemo.scene  (the shared world)
+└─ Assets/scenes/            # anakinsharddemo.scene  (the shared world)
 ```
 
 ---
@@ -269,7 +269,7 @@ processes from colliding.
 
 ## Configuration
 
-Each shard learns which one it is from the `+subzero_shard <id>` launch arg (read late, in
+Each shard learns which one it is from the `+anakin_shard <id>` launch arg (read late, in
 `ShardContext.OnStart`, with a hostname parse and an `A` default as fallbacks; whether the launch
 convar is applied before that point on a real dedicated server is unverified).
 
@@ -384,7 +384,7 @@ flowchart LR
 ```
 
 ### Overview
-The SubZeroShardDemo already uses the correct architecture for assigning shards to different CPU cores.
+The AnakinShardDemo already uses the correct architecture for assigning shards to different CPU cores.
 Each shard runs as its own dedicated s&box server process:
 * Shard A: Downtown
 * Shard B: Industrial
@@ -422,7 +422,7 @@ Each shard can still create multiple internal threads, but all of those threads 
 #### Current shard launcher
 The current shard script launches each shard as a separate process:
 ```bat
-"%SBOX_SERVER%" +game "%PROJECT%" +hostname "%NAME%" +port %PORT% +net_query_port %QPORT% +net_allow_local 1 +subzero_shard %SHARD% -allowlocalhttp
+"%SBOX_SERVER%" +game "%PROJECT%" +hostname "%NAME%" +port %PORT% +net_query_port %QPORT% +net_allow_local 1 +anakin_shard %SHARD% -allowlocalhttp
 ```
 
 #### Add CPU affinity
@@ -442,7 +442,7 @@ start "Shard %SHARD%" /wait /affinity %AFFINITY% "%SBOX_SERVER%" ^
     +port %PORT% ^
     +net_query_port %QPORT% ^
     +net_allow_local 1 ^
-    +subzero_shard %SHARD% ^
+    +anakin_shard %SHARD% ^
     -allowlocalhttp
 ```
 
@@ -552,8 +552,8 @@ sudo useradd --create-home --shell /bin/bash sbox
 Suggested directories:
 ```text
 /opt/sbox
-/srv/subzero/SubZeroShardDemo
-/var/log/subzero
+/srv/anakin/AnakinShardDemo
+/var/log/anakin
 /home/sbox/.steam
 ```
 
@@ -562,11 +562,11 @@ The simplest method is `taskset`.
 Example for Shard A:
 ```bash
 taskset --cpu-list 0-3 ./sbox-server.exe \
-  +game "/srv/subzero/SubZeroShardDemo/subzerosharddemo.sbproj" \
-  +hostname "SubZero Shard A - Downtown" \
+  +game "/srv/anakin/AnakinShardDemo/anakinsharddemo.sbproj" \
+  +hostname "Anakin Shard A - Downtown" \
   +port 27015 \
   +net_query_port 27016 \
-  +subzero_shard A \
+  +anakin_shard A \
   -allowlocalhttp
 ```
 This allows Shard A to use logical processors 0 through 3.
@@ -576,31 +576,31 @@ This allows Shard A to use logical processors 0 through 3.
 #!/usr/bin/env bash
 set -euo pipefail
 SERVER="/opt/sbox/sbox-server.exe"
-PROJECT="/srv/subzero/SubZeroShardDemo/subzerosharddemo.sbproj"
-LOG_DIR="/var/log/subzero"
+PROJECT="/srv/anakin/AnakinShardDemo/anakinsharddemo.sbproj"
+LOG_DIR="/var/log/anakin"
 mkdir -p "$LOG_DIR"
 taskset --cpu-list 0-3 "$SERVER" \
   +game "$PROJECT" \
-  +hostname "SubZero Shard A - Downtown" \
+  +hostname "Anakin Shard A - Downtown" \
   +port 27015 \
   +net_query_port 27016 \
-  +subzero_shard A \
+  +anakin_shard A \
   -allowlocalhttp \
   > "$LOG_DIR/shard-a.log" 2>&1 &
 taskset --cpu-list 4-7 "$SERVER" \
   +game "$PROJECT" \
-  +hostname "SubZero Shard B - Industrial" \
+  +hostname "Anakin Shard B - Industrial" \
   +port 27017 \
   +net_query_port 27018 \
-  +subzero_shard B \
+  +anakin_shard B \
   -allowlocalhttp \
   > "$LOG_DIR/shard-b.log" 2>&1 &
 taskset --cpu-list 8-11 "$SERVER" \
   +game "$PROJECT" \
-  +hostname "SubZero Shard C - Jail" \
+  +hostname "Anakin Shard C - Jail" \
   +port 27019 \
   +net_query_port 27020 \
-  +subzero_shard C \
+  +anakin_shard C \
   -allowlocalhttp \
   > "$LOG_DIR/shard-c.log" 2>&1 &
 wait
@@ -629,21 +629,21 @@ Benefits include:
 #### Shard service template
 Create:
 ```text
-/etc/systemd/system/subzero-shard@.service
+/etc/systemd/system/anakin-shard@.service
 ```
 Contents:
 ```ini
 [Unit]
-Description=SubZero s&box Shard %i
+Description=Anakin s&box Shard %i
 Wants=network-online.target
-After=network-online.target subzero-backend.service
-Requires=subzero-backend.service
+After=network-online.target anakin-backend.service
+Requires=anakin-backend.service
 [Service]
 Type=simple
 User=sbox
 Group=sbox
-WorkingDirectory=/srv/subzero/SubZeroShardDemo
-ExecStart=/usr/local/bin/run-subzero-shard %i
+WorkingDirectory=/srv/anakin/AnakinShardDemo
+ExecStart=/usr/local/bin/run-anakin-shard %i
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65535
@@ -656,7 +656,7 @@ WantedBy=multi-user.target
 ### Shard launch script
 Create:
 ```text
-/usr/local/bin/run-subzero-shard
+/usr/local/bin/run-anakin-shard
 ```
 Contents:
 ```bash
@@ -664,20 +664,20 @@ Contents:
 set -euo pipefail
 SHARD="${1^^}"
 SERVER="/opt/sbox/sbox-server.exe"
-PROJECT="/srv/subzero/SubZeroShardDemo/subzerosharddemo.sbproj"
+PROJECT="/srv/anakin/AnakinShardDemo/anakinsharddemo.sbproj"
 case "$SHARD" in
   A)
-    NAME="SubZero Shard A - Downtown"
+    NAME="Anakin Shard A - Downtown"
     PORT="27015"
     QUERY_PORT="27016"
     ;;
   B)
-    NAME="SubZero Shard B - Industrial"
+    NAME="Anakin Shard B - Industrial"
     PORT="27017"
     QUERY_PORT="27018"
     ;;
   C)
-    NAME="SubZero Shard C - Jail"
+    NAME="Anakin Shard C - Jail"
     PORT="27019"
     QUERY_PORT="27020"
     ;;
@@ -691,12 +691,12 @@ exec "$SERVER" \
   +hostname "$NAME" \
   +port "$PORT" \
   +net_query_port "$QUERY_PORT" \
-  +subzero_shard "$SHARD" \
+  +anakin_shard "$SHARD" \
   -allowlocalhttp
 ```
 Make it executable:
 ```bash
-sudo chmod +x /usr/local/bin/run-subzero-shard
+sudo chmod +x /usr/local/bin/run-anakin-shard
 ```
 
 ### Assigning CPU cores with systemd
@@ -705,7 +705,7 @@ Create a separate CPU configuration for each shard.
 #### Shard A
 Create:
 ```text
-/etc/systemd/system/subzero-shard@A.service.d/cpu.conf
+/etc/systemd/system/anakin-shard@A.service.d/cpu.conf
 ```
 Contents:
 ```ini
@@ -716,7 +716,7 @@ CPUAffinity=0-3
 #### Shard B
 Create:
 ```text
-/etc/systemd/system/subzero-shard@B.service.d/cpu.conf
+/etc/systemd/system/anakin-shard@B.service.d/cpu.conf
 ```
 Contents:
 ```ini
@@ -727,7 +727,7 @@ CPUAffinity=4-7
 #### Shard C
 Create:
 ```text
-/etc/systemd/system/subzero-shard@C.service.d/cpu.conf
+/etc/systemd/system/anakin-shard@C.service.d/cpu.conf
 ```
 Contents:
 ```ini
@@ -736,9 +736,9 @@ CPUAffinity=8-11
 ```
 Create the override directories if needed:
 ```bash
-sudo mkdir -p /etc/systemd/system/subzero-shard@A.service.d
-sudo mkdir -p /etc/systemd/system/subzero-shard@B.service.d
-sudo mkdir -p /etc/systemd/system/subzero-shard@C.service.d
+sudo mkdir -p /etc/systemd/system/anakin-shard@A.service.d
+sudo mkdir -p /etc/systemd/system/anakin-shard@B.service.d
+sudo mkdir -p /etc/systemd/system/anakin-shard@C.service.d
 ```
 
 ### Starting the shards
@@ -748,65 +748,65 @@ sudo systemctl daemon-reload
 ```
 Enable the services at boot:
 ```bash
-sudo systemctl enable subzero-backend.service
-sudo systemctl enable subzero-shard@A.service
-sudo systemctl enable subzero-shard@B.service
-sudo systemctl enable subzero-shard@C.service
+sudo systemctl enable anakin-backend.service
+sudo systemctl enable anakin-shard@A.service
+sudo systemctl enable anakin-shard@B.service
+sudo systemctl enable anakin-shard@C.service
 ```
 Start everything:
 ```bash
-sudo systemctl start subzero-backend.service
-sudo systemctl start subzero-shard@A.service
-sudo systemctl start subzero-shard@B.service
-sudo systemctl start subzero-shard@C.service
+sudo systemctl start anakin-backend.service
+sudo systemctl start anakin-shard@A.service
+sudo systemctl start anakin-shard@B.service
+sudo systemctl start anakin-shard@C.service
 ```
 You can also enable and start them in one command:
 ```bash
 sudo systemctl enable --now \
-  subzero-backend.service \
-  subzero-shard@A.service \
-  subzero-shard@B.service \
-  subzero-shard@C.service
+  anakin-backend.service \
+  anakin-shard@A.service \
+  anakin-shard@B.service \
+  anakin-shard@C.service
 ```
 
 ### Checking service status
 Check a shard:
 ```bash
-systemctl status subzero-shard@A
+systemctl status anakin-shard@A
 ```
 Check all shard services:
 ```bash
-systemctl status "subzero-shard@*"
+systemctl status "anakin-shard@*"
 ```
 Restart a shard:
 ```bash
-sudo systemctl restart subzero-shard@A
+sudo systemctl restart anakin-shard@A
 ```
 Stop a shard:
 ```bash
-sudo systemctl stop subzero-shard@A
+sudo systemctl stop anakin-shard@A
 ```
 Start a shard:
 ```bash
-sudo systemctl start subzero-shard@A
+sudo systemctl start anakin-shard@A
 ```
 
 ### Viewing logs
 Follow Shard A logs:
 ```bash
-journalctl -u subzero-shard@A -f
+journalctl -u anakin-shard@A -f
 ```
 Follow Shard B logs:
 ```bash
-journalctl -u subzero-shard@B -f
+journalctl -u anakin-shard@B -f
 ```
 Follow Shard C logs:
 ```bash
-journalctl -u subzero-shard@C -f
+journalctl -u anakin-shard@C -f
 ```
 View recent logs:
 ```bash
-journalctl -u subzero-shard@A --since "30 minutes ago"
+journalctl -u anakin-shard@A --since "30 minutes ago"
 ```
 
 ### Example CPU layout
@@ -925,7 +925,7 @@ export SHARD_DEMO_SECRET="replace-with-a-secure-secret"
 With systemd:
 ```ini
 [Service]
-EnvironmentFile=/etc/subzero/subzero.env
+EnvironmentFile=/etc/anakin/anakin.env
 ```
 Example environment file:
 ```text
@@ -933,8 +933,8 @@ SHARD_DEMO_SECRET=replace-with-a-secure-secret
 ```
 Permissions:
 ```bash
-sudo chmod 600 /etc/subzero/subzero.env
-sudo chown root:root /etc/subzero/subzero.env
+sudo chmod 600 /etc/anakin/anakin.env
+sudo chown root:root /etc/anakin/anakin.env
 ```
 
 ### Database recommendation
@@ -1143,4 +1143,10 @@ Use:
 * Steam lobbies or the supported s&box connection system for players
 * A shard manager later for automatic scaling
 
-The current SubZeroShardDemo architecture is already suitable for this because every shard runs as its own dedicated server process.
+The current AnakinShardDemo architecture is already suitable for this because every shard runs as its own dedicated server process.
+
+---
+
+## License
+
+Proprietary. Copyright (c) 2026 JordanR123. All rights reserved. See LICENSE.

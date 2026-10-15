@@ -1,6 +1,6 @@
 # Multiplayer
 
-Networking model for SubZeroShardDemo. Read before UI, networking, or scene flow work.
+Networking model for AnakinShardDemo. Read before UI, networking, or scene flow work.
 
 ## Model
 
@@ -10,12 +10,12 @@ is true, so a client (or the editor) never hosts a shard and never talks to the 
 
 - Shard: one `sbox-server.exe` per shard (`A`, `B`, `C`), same project and same scene, ports
   27015/27017/27019 (query 27016/27018/27020). Launched by `Development/Scripts/run-shard.bat`
-  with `+subzero_shard <id>`.
+  with `+anakin_shard <id>`.
 - Backend: `backend/` on `http://localhost:8443`. It holds authoritative player state (money,
   item, cuffs, position, current shard, in-transit marker), the server directory, and the
   transfer state machine. Every request is an HMAC-SHA256 signed envelope
   `{ payload, sig }`; the game signs with the managed `Code/Shared/Hmac.cs`.
-- Scene that owns the session: `scenes/subzerosharddemo.scene`, object `Shard` (ShardContext,
+- Scene that owns the session: `scenes/anakinsharddemo.scene`, object `Shard` (ShardContext,
   ShardNetwork, ServerDirectory, TransferService).
 - Authority: the host (dedicated server) runs gate rules, ledger calls, prepare/accept and state
   application. Clients read `[Sync( SyncFlags.FromHost )]` values for the HUD and may only

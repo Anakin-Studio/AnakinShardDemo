@@ -1,6 +1,6 @@
 # Product Scope
 
-What SubZeroShardDemo is and is not. Read before adding UI, menus, or features.
+What AnakinShardDemo is and is not. Read before adding UI, menus, or features.
 
 ## In Scope
 

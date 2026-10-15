@@ -2,7 +2,7 @@
 
 using Sandbox;
 
-namespace SubZeroShardDemo;
+namespace AnakinShardDemo;
 
 /// <summary>
 /// One source of truth for "which shard am I". Authored on a stable-GUID scene object and
@@ -20,9 +20,9 @@ public sealed class ShardContext : Component
 
 	public static ShardContext? Current { get; private set; }
 
-	// Set by the launch arg `+subzero_shard A|B|C` (launch params are convars applied at boot).
+	// Set by the launch arg `+anakin_shard A|B|C` (launch params are convars applied at boot).
 	// Read late (OnStart), with hostname and default fallbacks.
-	[ConVar( "subzero_shard" )] public static string ShardArg { get; set; } = "";
+	[ConVar( "anakin_shard" )] public static string ShardArg { get; set; } = "";
 
 	// Replicated to clients (safe to show). Never put the secret here.
 	[Sync( SyncFlags.FromHost )] public string ShardId { get; set; } = "A";
@@ -62,11 +62,11 @@ public sealed class ShardContext : Component
 
 	private static string ResolveShardId()
 	{
-		// 1. launch convar +subzero_shard A
+		// 1. launch convar +anakin_shard A
 		if ( !string.IsNullOrWhiteSpace( ShardArg ) )
 			return Normalize( ShardArg );
 
-		// 2. parse from the server hostname, e.g. "SubZero Shard B - Industrial"
+		// 2. parse from the server hostname, e.g. "Anakin Shard B - Industrial"
 		try
 		{
 			var name = LaunchArguments.ServerName ?? "";

@@ -1,6 +1,6 @@
 using Sandbox;
 
-namespace SubZeroShardDemo;
+namespace AnakinShardDemo;
 
 /// <summary>
 /// Lives on the player prefab. Carries the two host-to-owner RPCs the transfer needs: telling

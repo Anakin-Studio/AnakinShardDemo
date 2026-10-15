@@ -1,6 +1,6 @@
 #nullable enable
 
-namespace SubZeroShardDemo;
+namespace AnakinShardDemo;
 
 // Game-side mirror of the backend's wire contract (backend/Models.cs). Kept as a parallel
 // definition because the game and backend compile into separate assemblies. JSON shapes must

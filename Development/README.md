@@ -1,17 +1,17 @@
-# SubZeroShardDemo Developer README
+# AnakinShardDemo Developer README
 
-Team-facing hub for understanding the SubZeroShardDemo project layout, gameplay loop, and where each
+Team-facing hub for understanding the AnakinShardDemo project layout, gameplay loop, and where each
 kind of work belongs. Files in `Development/` are not read by s&box at runtime.
 
 ## Project Snapshot
 
 TODO: one paragraph describing the game.
 
-- Game title: `SubZeroShardDemo`
-- Author: `SubZero Studios`
-- Project file: `subzerosharddemo.sbproj`
-- Package ident: `subzerostudios.subzerosharddemo`
-- Startup scene: `scenes/subzerosharddemo.scene`
+- Game title: `AnakinShardDemo`
+- Author: `Anakin Studios`
+- Project file: `anakinsharddemo.sbproj`
+- Package ident: `anakin.anakinsharddemo`
+- Startup scene: `scenes/anakinsharddemo.scene`
 
 ## How To Play
 
@@ -70,7 +70,7 @@ Shared, cross-project resources. Read before building anything common:
   `Docs/AdoptedPackages.md`.
 - `C:\Users\Jordan\Documents\s&box projects\1AI DEEP RESEARCH\SBox-Skills\`: engine textbook with
   source-cited topic docs (components, UI, physics, networking, audio, scenes).
-- `C:\Users\Jordan\Documents\s&box projects\1AI DEEP RESEARCH\SubZero-SBox-MCP\`: MCP server giving
+- `C:\Users\Jordan\Documents\s&box projects\1AI DEEP RESEARCH\Anakin-SBox-MCP\`: MCP server giving
   agents searchable access to s&box reference repos and docs.
 
 ## Team Rules

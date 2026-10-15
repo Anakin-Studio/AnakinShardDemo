@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.Json;
-using SubZeroShardBackend;
+using AnakinShardBackend;
 
-// SubZeroShardDemo backend: shared player store, server directory and transfer coordinator.
+// AnakinShardDemo backend: shared player store, server directory and transfer coordinator.
 // Runs on http://localhost:8443. Every request is an HMAC-signed envelope { payload, sig }.
 // See Store.cs for the state machine.
 
@@ -53,7 +53,7 @@ async Task<(T? val, IResult? err)> Read<T>( HttpContext ctx )
 	catch { return (default, Results.BadRequest( new OkResp( false, "bad payload" ) )); }
 }
 
-app.MapGet( "/health", () => Results.Json( new { ok = true, service = "subzero-shard-backend" } ) );
+app.MapGet( "/health", () => Results.Json( new { ok = true, service = "anakin-shard-backend" } ) );
 
 app.MapPost( "/player/get", async ( HttpContext c ) =>
 {
@@ -115,7 +115,7 @@ app.MapPost( "/debug/force-expire", async ( HttpContext c ) =>
 using var sweeper = new Timer( _ => store.SweepExpired(), null,
 	TimeSpan.FromSeconds( 5 ), TimeSpan.FromSeconds( 5 ) );
 
-Log( $"[boot] SubZeroShardDemo backend on {url}" );
+Log( $"[boot] AnakinShardDemo backend on {url}" );
 Log( $"[boot] secret: {(secret == Store.DefaultSecret ? "default demo secret (config/shard.*.json)" : "from SHARD_DEMO_SECRET env")}" );
 Log( $"[boot] data file: {dataFile}" );
 

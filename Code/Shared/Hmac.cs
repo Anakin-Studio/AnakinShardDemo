@@ -1,7 +1,7 @@
 using System;
 using System.Text;
 
-namespace SubZeroShardDemo;
+namespace AnakinShardDemo;
 
 /// <summary>
 /// HMAC-SHA256 for backend request signing. The s&box sandbox whitelist blocks

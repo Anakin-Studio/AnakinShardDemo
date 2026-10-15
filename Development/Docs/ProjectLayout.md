@@ -1,6 +1,6 @@
 # Project Layout
 
-Where files belong in SubZeroShardDemo. See also the repo layout table in `Development/README.md`.
+Where files belong in AnakinShardDemo. See also the repo layout table in `Development/README.md`.
 
 ## Ownership Map
 

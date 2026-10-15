@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Sandbox;
 
-namespace SubZeroShardDemo;
+namespace AnakinShardDemo;
 
 /// <summary>
 /// Typed, async wrapper over the backend HTTP API. Every call is an HMAC-signed envelope.

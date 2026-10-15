@@ -10,7 +10,7 @@ Get-Process sbox-server -ErrorAction SilentlyContinue | ForEach-Object {
 }
 
 Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" -ErrorAction SilentlyContinue |
-  Where-Object { $_.CommandLine -match 'SubZeroShardBackend' } |
+  Where-Object { $_.CommandLine -match 'AnakinShardBackend' } |
   ForEach-Object {
     try { Stop-Process -Id $_.ProcessId -Force; $n++ } catch {}
   }

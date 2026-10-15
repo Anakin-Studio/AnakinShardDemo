@@ -1,6 +1,6 @@
 using Sandbox;
 
-namespace SubZeroShardDemo;
+namespace AnakinShardDemo;
 
 /// <summary>
 /// Mutable per-player test state that drives the transfer gate rules. Host-authoritative

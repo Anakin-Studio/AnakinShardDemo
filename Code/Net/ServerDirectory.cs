@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Sandbox;
 
-namespace SubZeroShardDemo;
+namespace AnakinShardDemo;
 
 /// <summary>
 /// Host-side heartbeat + lookup against the backend server directory. On a timer it POSTs

@@ -2,7 +2,7 @@
 
 using Sandbox;
 
-namespace SubZeroShardDemo;
+namespace AnakinShardDemo;
 
 /// <summary>
 /// A pressable transfer button. Look at it (the HUD shows a prompt) and press the use key (E)

@@ -19,19 +19,19 @@ if /I not "%CONFIRM%"=="y" if /I not "%CONFIRM%"=="yes" goto :cancel
 
 echo.
 echo Starting backend...
-start "SubZero Backend" "%~dp0run-backend.bat"
+start "Anakin Backend" "%~dp0run-backend.bat"
 timeout /t 3 /nobreak >nul
 
 echo Starting shard A...
-start "SubZero Shard A" "%~dp0run-shard.bat" A
+start "Anakin Shard A" "%~dp0run-shard.bat" A
 timeout /t 2 /nobreak >nul
 
 echo Starting shard B...
-start "SubZero Shard B" "%~dp0run-shard.bat" B
+start "Anakin Shard B" "%~dp0run-shard.bat" B
 timeout /t 2 /nobreak >nul
 
 echo Starting shard C...
-start "SubZero Shard C" "%~dp0run-shard.bat" C
+start "Anakin Shard C" "%~dp0run-shard.bat" C
 
 echo.
 echo Launched backend + shards A/B/C in separate windows.

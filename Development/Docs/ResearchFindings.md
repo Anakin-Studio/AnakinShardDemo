@@ -1,4 +1,4 @@
-# SubZeroShardDemo Research Findings
+# AnakinShardDemo Research Findings
 
 Audit plus ranked backlog. Produced when researching this project against the knowledge base and
 shipped reference projects. Keep the backlog ranked; agents pick from the top.

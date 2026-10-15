@@ -1,8 +1,8 @@
 # Architecture
 
-High-level game flow and system ownership for SubZeroShardDemo.
+High-level game flow and system ownership for AnakinShardDemo.
 
-SubZeroShardDemo moves a connected player between separate dedicated s&box servers ("shards"),
+AnakinShardDemo moves a connected player between separate dedicated s&box servers ("shards"),
 carrying money, one carried item, a handcuff flag and a position. Last reviewed against the code
 on 2026-10-09. Items marked "unverified" have no live in-game run behind them yet (see
 `TEST_RESULTS.md`, local-only).
@@ -11,12 +11,12 @@ on 2026-10-09. Items marked "unverified" have no live in-game run behind them ye
 
 Processes: one backend (`backend/`, .NET 10, `http://localhost:8443`) and N shards. Each shard is
 its own `sbox-server.exe` running this same project and the same scene
-(`scenes/subzerosharddemo.scene`). Shard ids today are exactly `A`, `B`, `C`
+(`scenes/anakinsharddemo.scene`). Shard ids today are exactly `A`, `B`, `C`
 (`Code/Shard/ShardContext.cs`).
 
 Shard process (dedicated server only, gated on `Application.IsDedicatedServer`):
 
-1. Boot: the launch arg `+subzero_shard X` selects the shard id (convar, then hostname parse, then
+1. Boot: the launch arg `+anakin_shard X` selects the shard id (convar, then hostname parse, then
    `A`). `ShardContext.OnStart` loads `ShardConfig` (baked defaults; the JSON file is probably not
    read) and builds a `BackendClient` with the shared HMAC secret.
 2. `ShardNetwork.OnStart` creates the Steam lobby and tags it with `shardid` via
@@ -87,7 +87,7 @@ through the backend ledger (idempotent per transfer id); the snapshot is applied
 
 ## Scene Structure
 
-One scene, `scenes/subzerosharddemo.scene`, used by every shard (`DedicatedServerStartupScene` in
+One scene, `scenes/anakinsharddemo.scene`, used by every shard (`DedicatedServerStartupScene` in
 the `.sbproj`). Objects it must contain: `Shard` (ShardContext, ShardNetwork, ServerDirectory,
 TransferService), a disabled `PlayerTemplate` object (found by name; `PlayerPrefab` is left null),
 `SpawnPoint`, `ArrivalPoint`, `Floor`, a camera and light, `HUD` (ScreenPanel plus DebugHud), and the

@@ -109,7 +109,7 @@
       "OwnerTransfer": 1,
       "Components": [
         {
-          "__type": "SubZeroShardDemo.ShardContext",
+          "__type": "AnakinShardDemo.ShardContext",
           "__guid": "b4ca1452-2ed7-4000-9c5e-87c2b96b9f71",
           "__enabled": true,
           "Flags": 0,
@@ -121,7 +121,7 @@
           "OnComponentUpdate": null
         },
         {
-          "__type": "SubZeroShardDemo.ShardNetwork",
+          "__type": "AnakinShardDemo.ShardNetwork",
           "__guid": "4f1633ff-6142-4fa1-b470-5560de88ccdc",
           "__enabled": true,
           "Flags": 0,
@@ -136,7 +136,7 @@
           "SpawnPoint": null
         },
         {
-          "__type": "SubZeroShardDemo.ServerDirectory",
+          "__type": "AnakinShardDemo.ServerDirectory",
           "__guid": "ca3e8f0c-4b0b-4421-8cff-446f047ab350",
           "__enabled": true,
           "Flags": 0,
@@ -149,7 +149,7 @@
           "OnComponentUpdate": null
         },
         {
-          "__type": "SubZeroShardDemo.TransferService",
+          "__type": "AnakinShardDemo.TransferService",
           "__guid": "4dc5c1a1-cb59-437f-9ab3-09f1b304ea30",
           "__enabled": true,
           "Flags": 0,
@@ -270,7 +270,7 @@
             "ContainerProperty": "Components",
             "IsContainerArray": true,
             "Data": {
-              "__type": "SubZeroShardDemo.PlayerWallet",
+              "__type": "AnakinShardDemo.PlayerWallet",
               "__guid": "84d9cbe7-59c4-4c7c-a68e-f51b64e527da",
               "__enabled": true,
               "Flags": 0,
@@ -298,7 +298,7 @@
             "ContainerProperty": "Components",
             "IsContainerArray": true,
             "Data": {
-              "__type": "SubZeroShardDemo.PlayerTestState",
+              "__type": "AnakinShardDemo.PlayerTestState",
               "__guid": "ca915292-d5ed-452e-a26f-4f67c44f0918",
               "__enabled": true,
               "Flags": 0,
@@ -326,7 +326,7 @@
             "ContainerProperty": "Components",
             "IsContainerArray": true,
             "Data": {
-              "__type": "SubZeroShardDemo.PlayerTransfer",
+              "__type": "AnakinShardDemo.PlayerTransfer",
               "__guid": "fd99e9bc-2f97-4785-8bdf-e60cd975db3b",
               "__enabled": true,
               "Flags": 0,
@@ -506,7 +506,7 @@
           "SurfaceVelocity": "0,0,0"
         },
         {
-          "__type": "SubZeroShardDemo.TransitionZone",
+          "__type": "AnakinShardDemo.TransitionZone",
           "__guid": "cc776573-ee3c-478c-8ba1-eaeff1ebfd85",
           "__enabled": true,
           "Flags": 0,
@@ -613,7 +613,7 @@
           "SurfaceVelocity": "0,0,0"
         },
         {
-          "__type": "SubZeroShardDemo.TransitionZone",
+          "__type": "AnakinShardDemo.TransitionZone",
           "__guid": "0e7ad9bd-1995-40ed-820d-a06586a3397d",
           "__enabled": true,
           "Flags": 0,
@@ -720,7 +720,7 @@
           "SurfaceVelocity": "0,0,0"
         },
         {
-          "__type": "SubZeroShardDemo.TransitionZone",
+          "__type": "AnakinShardDemo.TransitionZone",
           "__guid": "b0d32c71-cf54-4da4-afff-42011acd0fc5",
           "__enabled": true,
           "Flags": 0,
@@ -827,7 +827,7 @@
           "SurfaceVelocity": "0,0,0"
         },
         {
-          "__type": "SubZeroShardDemo.TransitionZone",
+          "__type": "AnakinShardDemo.TransitionZone",
           "__guid": "b1b51496-489f-491b-bfef-4748edd9be11",
           "__enabled": true,
           "Flags": 0,

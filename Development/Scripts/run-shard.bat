@@ -2,7 +2,7 @@
 setlocal enableextensions
 
 rem ============================================================================
-rem  Launch one SubZeroShardDemo dedicated server (shard A / B / C).
+rem  Launch one AnakinShardDemo dedicated server (shard A / B / C).
 rem  Usage:  run-shard.bat A        (defaults to A if omitted)
 rem
 rem  NOTE: no parenthesised ( ) if-blocks below on purpose - the server path
@@ -17,18 +17,18 @@ if not defined SBOX_SERVER set "SBOX_SERVER=C:\Program Files (x86)\Steam\steamap
 if not exist "%SBOX_SERVER%" if exist "C:\Program Files (x86)\Steam\steamapps\common\sbox 2129370\sbox-server.exe" set "SBOX_SERVER=C:\Program Files (x86)\Steam\steamapps\common\sbox 2129370\sbox-server.exe"
 
 rem --- Project file (this repo). %~dp0 is the scripts\ folder. ---
-set "PROJECT=%~dp0..\subzerosharddemo.sbproj"
+set "PROJECT=%~dp0..\anakinsharddemo.sbproj"
 
 set "NAME="
 set "PORT="
 set "QPORT="
-if /I "%SHARD%"=="A" set "NAME=SubZero Shard A - Downtown"
+if /I "%SHARD%"=="A" set "NAME=Anakin Shard A - Downtown"
 if /I "%SHARD%"=="A" set "PORT=27015"
 if /I "%SHARD%"=="A" set "QPORT=27016"
-if /I "%SHARD%"=="B" set "NAME=SubZero Shard B - Industrial"
+if /I "%SHARD%"=="B" set "NAME=Anakin Shard B - Industrial"
 if /I "%SHARD%"=="B" set "PORT=27017"
 if /I "%SHARD%"=="B" set "QPORT=27018"
-if /I "%SHARD%"=="C" set "NAME=SubZero Shard C - Jail"
+if /I "%SHARD%"=="C" set "NAME=Anakin Shard C - Jail"
 if /I "%SHARD%"=="C" set "PORT=27019"
 if /I "%SHARD%"=="C" set "QPORT=27020"
 
@@ -40,7 +40,7 @@ echo   server:  "%SBOX_SERVER%"
 echo   project: "%PROJECT%"
 echo   backend: http://localhost:8443
 echo.
-"%SBOX_SERVER%" +game "%PROJECT%" +hostname "%NAME%" +port %PORT% +net_query_port %QPORT% +net_allow_local 1 +subzero_shard %SHARD% -allowlocalhttp
+"%SBOX_SERVER%" +game "%PROJECT%" +hostname "%NAME%" +port %PORT% +net_query_port %QPORT% +net_allow_local 1 +anakin_shard %SHARD% -allowlocalhttp
 goto :eof
 
 :badshard

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Sandbox;
 
-namespace SubZeroShardDemo;
+namespace AnakinShardDemo;
 
 /// <summary>
 /// Per-shard configuration, loaded at boot from <c>config/shard.&lt;id&gt;.json</c> (mounted

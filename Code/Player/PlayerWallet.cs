@@ -1,6 +1,6 @@
 using Sandbox;
 
-namespace SubZeroShardDemo;
+namespace AnakinShardDemo;
 
 /// <summary>
 /// A player's money. Host-authoritative: only the host may write <see cref="Money"/>

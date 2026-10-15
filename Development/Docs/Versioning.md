@@ -1,6 +1,6 @@
 # Versioning
 
-Version number and milestone rules for SubZeroShardDemo. The authoritative rules live in
+Version number and milestone rules for AnakinShardDemo. The authoritative rules live in
 `Agent/VersionControl.md`; this doc records the milestone history.
 
 ## Milestones

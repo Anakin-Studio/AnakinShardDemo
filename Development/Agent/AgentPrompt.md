@@ -1,11 +1,11 @@
-# SubZeroShardDemo Agent Prompt
+# AnakinShardDemo Agent Prompt
 
 Self-contained prompt for low-token agents working on this project. Keep it short enough to paste
 whole. Update when facts, rules, or traps change.
 
 ## Project Facts
 
-- Game: SubZeroShardDemo (subzerostudios.subzerosharddemo), s&box, project file `subzerosharddemo.sbproj`.
+- Game: AnakinShardDemo (anakin.anakinsharddemo), s&box, project file `anakinsharddemo.sbproj`.
 - TODO: one line on the core loop.
 - TODO: startup scene and scene flow.
 - TODO: key systems and the folders that own them.

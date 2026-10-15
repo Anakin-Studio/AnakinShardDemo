@@ -1,6 +1,6 @@
 # Game Design
 
-Core loop and gameplay rules for SubZeroShardDemo. Read before changing gameplay flow.
+Core loop and gameplay rules for AnakinShardDemo. Read before changing gameplay flow.
 
 ## Core Loop
 

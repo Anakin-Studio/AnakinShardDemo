@@ -4,23 +4,23 @@ using System.Linq;
 using System.Threading.Tasks;
 using Sandbox;
 
-namespace SubZeroShardDemo;
+namespace AnakinShardDemo;
 
 /// <summary>
 /// Debug console commands to drive the tests. All run host-side (ConVarFlags.Server) and act
 /// on the caller's player, so state changes stay host-authoritative.
 ///
 /// Usage from the client console (or dedicated-server console for the host):
-///   subzero_setmoney 500      set the caller's money (routed through the backend ledger)
-///   subzero_cuffs 1           handcuff (1) / uncuff (0)
-///   subzero_item briefcase    set the carried item ("" for none)
-///   subzero_combat            mark just-took-damage (starts the 5s combat lock)
-///   subzero_transfer B        force a Normal transfer to shard B/C/A
-///   subzero_info              print shard and player state to the console
+///   anakin_setmoney 500      set the caller's money (routed through the backend ledger)
+///   anakin_cuffs 1           handcuff (1) / uncuff (0)
+///   anakin_item briefcase    set the carried item ("" for none)
+///   anakin_combat            mark just-took-damage (starts the 5s combat lock)
+///   anakin_transfer B        force a Normal transfer to shard B/C/A
+///   anakin_info              print shard and player state to the console
 /// </summary>
 public static class DebugCommands
 {
-	[ConCmd( "subzero_setmoney", ConVarFlags.Server )]
+	[ConCmd( "anakin_setmoney", ConVarFlags.Server )]
 	public static void SetMoney( Connection caller, int amount )
 	{
 		var go = FindPlayer( caller );
@@ -43,7 +43,7 @@ public static class DebugCommands
 		Log.Info( $"[debug] setmoney {steamId} -> {led?.Balance}" );
 	}
 
-	[ConCmd( "subzero_cuffs", ConVarFlags.Server )]
+	[ConCmd( "anakin_cuffs", ConVarFlags.Server )]
 	public static void Cuffs( Connection caller, int on )
 	{
 		var state = FindPlayer( caller )?.Components.Get<PlayerTestState>();
@@ -52,7 +52,7 @@ public static class DebugCommands
 		Log.Info( $"[debug] cuffs {caller.SteamId} = {state.Handcuffed}" );
 	}
 
-	[ConCmd( "subzero_item", ConVarFlags.Server )]
+	[ConCmd( "anakin_item", ConVarFlags.Server )]
 	public static void SetItem( Connection caller, string item )
 	{
 		var state = FindPlayer( caller )?.Components.Get<PlayerTestState>();
@@ -61,7 +61,7 @@ public static class DebugCommands
 		Log.Info( $"[debug] item {caller.SteamId} = '{state.CarriedItem}'" );
 	}
 
-	[ConCmd( "subzero_combat", ConVarFlags.Server )]
+	[ConCmd( "anakin_combat", ConVarFlags.Server )]
 	public static void Combat( Connection caller )
 	{
 		var state = FindPlayer( caller )?.Components.Get<PlayerTestState>();
@@ -70,7 +70,7 @@ public static class DebugCommands
 		Log.Info( $"[debug] combat {caller.SteamId} at {Time.Now:0.0}" );
 	}
 
-	[ConCmd( "subzero_transfer", ConVarFlags.Server )]
+	[ConCmd( "anakin_transfer", ConVarFlags.Server )]
 	public static void ForceTransfer( Connection caller, string target )
 	{
 		var go = FindPlayer( caller );
@@ -78,7 +78,7 @@ public static class DebugCommands
 		_ = TransferService.Current?.RequestTransfer( go, target.Trim().ToUpperInvariant(), TransferRule.Normal, 0 );
 	}
 
-	[ConCmd( "subzero_info", ConVarFlags.Server )]
+	[ConCmd( "anakin_info", ConVarFlags.Server )]
 	public static void Info( Connection caller )
 	{
 		var ctx = ShardContext.Current;
